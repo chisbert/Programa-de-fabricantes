@@ -1,0 +1,6 @@
+{
+  "name": "TramaHogar - Control de Pedidos y Costes de Ropa de Hogar",
+  "description": "Gestión semanal de pedidos a proveedores, comparativa de costes por fabricante y control de inventario de ropa de hogar por medidas y calidades.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
