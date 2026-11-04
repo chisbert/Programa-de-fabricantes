@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActiveTab } from '../types';
+import { useStore } from '../context/StoreContext';
 import { 
   Package, 
   TrendingUp, 
@@ -9,7 +10,9 @@ import {
   PlusCircle, 
   Database,
   Moon,
-  Sun
+  Sun,
+  Folder,
+  FolderCheck
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -17,6 +20,7 @@ interface HeaderProps {
   setActiveTab: (tab: ActiveTab) => void;
   onOpenNewOrder: () => void;
   onOpenBackup: () => void;
+  onOpenFolderConfig: () => void;
   darkMode: boolean;
   toggleDarkMode: () => void;
 }
@@ -26,9 +30,11 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   onOpenNewOrder,
   onOpenBackup,
+  onOpenFolderConfig,
   darkMode,
   toggleDarkMode,
 }) => {
+  const { localFolder } = useStore();
   return (
     <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -118,6 +124,25 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Zone 3: Primary Action + Utilities */}
           <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              onClick={onOpenFolderConfig}
+              title={localFolder.isConnected ? `Carpeta vinculada: ${localFolder.folderName}` : 'Vincular carpeta del Escritorio para guardado directo'}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                localFolder.isConnected
+                  ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {localFolder.isConnected ? (
+                <FolderCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <Folder className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              )}
+              <span className="hidden sm:inline font-mono text-[11px] max-w-[130px] truncate">
+                {localFolder.isConnected ? localFolder.folderName : 'Carpeta Escritorio'}
+              </span>
+            </button>
+
             <button
               onClick={onOpenBackup}
               title="Copia de seguridad y exportación a Excel / CSV"
