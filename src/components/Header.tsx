@@ -12,7 +12,8 @@ import {
   Moon,
   Sun,
   Folder,
-  FolderCheck
+  FolderCheck,
+  Tag
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -21,6 +22,7 @@ interface HeaderProps {
   onOpenNewOrder: () => void;
   onOpenBackup: () => void;
   onOpenFolderConfig: () => void;
+  onOpenCategories?: () => void;
   darkMode: boolean;
   toggleDarkMode: () => void;
 }
@@ -31,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNewOrder,
   onOpenBackup,
   onOpenFolderConfig,
+  onOpenCategories,
   darkMode,
   toggleDarkMode,
 }) => {
@@ -151,6 +154,17 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Database className="w-4 h-4" />
             </button>
+
+            {onOpenCategories && (
+              <button
+                onClick={onOpenCategories}
+                title="Gestionar Categorías de Ropa de Hogar"
+                className="p-2 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                aria-label="Gestionar categorías"
+              >
+                <Tag className="w-4 h-4" />
+              </button>
+            )}
 
             <button
               onClick={toggleDarkMode}

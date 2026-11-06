@@ -12,7 +12,9 @@ import {
   FileSpreadsheet, 
   FileCode, 
   Info,
-  Unplug
+  Unplug,
+  FolderDown,
+  Upload
 } from 'lucide-react';
 
 interface LocalFolderConfigModalProps {
@@ -26,10 +28,12 @@ export const LocalFolderConfigModal: React.FC<LocalFolderConfigModalProps> = ({ 
     selectDesktopFolder, 
     disconnectDesktopFolder, 
     syncToDesktopFolder, 
+    loadFromDesktopFolder,
     toggleAutoSaveToFolder 
   } = useStore();
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoadingFromFolder, setIsLoadingFromFolder] = useState(false);
   const [feedback, setFeedback] = useState<{ message: string; isError?: boolean } | null>(null);
 
   if (!isOpen) return null;
@@ -38,7 +42,7 @@ export const LocalFolderConfigModal: React.FC<LocalFolderConfigModalProps> = ({ 
     setFeedback(null);
     const success = await selectDesktopFolder();
     if (success) {
-      setFeedback({ message: 'Carpeta vinculada correctamente. Los archivos se han guardado con éxito.' });
+      setFeedback({ message: 'Carpeta vinculada correctamente y datos sincronizados.' });
     }
   };
 
@@ -48,9 +52,21 @@ export const LocalFolderConfigModal: React.FC<LocalFolderConfigModalProps> = ({ 
     const result = await syncToDesktopFolder();
     setIsSyncing(false);
     if (result.success) {
-      setFeedback({ message: result.message || 'Archivos sincronizados en tu carpeta local.' });
+      setFeedback({ message: result.message || 'Archivos guardados en tu carpeta local.' });
     } else {
       setFeedback({ message: result.message || 'Error al guardar en la carpeta.', isError: true });
+    }
+  };
+
+  const handleLoadFromFolder = async () => {
+    setIsLoadingFromFolder(true);
+    setFeedback(null);
+    const result = await loadFromDesktopFolder();
+    setIsLoadingFromFolder(false);
+    if (result.success) {
+      setFeedback({ message: result.message });
+    } else {
+      setFeedback({ message: result.message, isError: true });
     }
   };
 
@@ -136,23 +152,47 @@ export const LocalFolderConfigModal: React.FC<LocalFolderConfigModalProps> = ({ 
               Seleccionar Carpeta en el Escritorio
             </button>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={handleSyncNow}
-                disabled={isSyncing}
-                className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                {isSyncing ? 'Guardando...' : 'Guardar Cambios Ahora'}
-              </button>
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  onClick={handleLoadFromFolder}
+                  disabled={isLoadingFromFolder || isSyncing}
+                  className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs"
+                >
+                  <FolderDown className={`w-4 h-4 ${isLoadingFromFolder ? 'animate-bounce' : ''}`} />
+                  {isLoadingFromFolder ? 'Cargando datos...' : 'Cargar Datos de la Carpeta'}
+                </button>
+
+                <button
+                  onClick={handleSyncNow}
+                  disabled={isSyncing || isLoadingFromFolder}
+                  className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-1.5 text-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Guardando...' : 'Guardar Cambios en Carpeta'}
+                </button>
+              </div>
 
               <button
                 onClick={handleSelectFolder}
-                className="py-2.5 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 text-xs"
+                className="w-full py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 text-xs"
               >
                 <Folder className="w-3.5 h-3.5" />
-                Cambiar de Carpeta
+                Cambiar Carpeta del Escritorio
               </button>
+            </div>
+          )}
+
+          {/* Explanation on dropping files */}
+          {localFolder.isConnected && (
+            <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-lg text-xs space-y-1.5">
+              <div className="font-bold text-blue-900 dark:text-blue-300 flex items-center gap-1.5">
+                <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                ¿Puedo colocar un archivo de pedido en la carpeta y subirlo?
+              </div>
+              <p className="text-[11px] text-blue-800/90 dark:text-blue-200 leading-relaxed">
+                <strong>¡Sí!</strong> Si copias o sustituyes el archivo <code>tramahogar_datos_tienda.json</code> dentro de tu carpeta <em>"{localFolder.folderName}"</em>, pulsa el botón verde <strong>"Cargar Datos de la Carpeta"</strong>. La aplicación leerá el archivo del disco y actualizará inmediatamente tus pedidos, precios de coste y existencias.
+              </p>
             </div>
           )}
 

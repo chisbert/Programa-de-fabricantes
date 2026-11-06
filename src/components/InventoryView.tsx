@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { BedSize, TextileCategory, Product } from '../types';
-import { TEXTILE_CATEGORIES, INITIAL_BED_SIZES } from '../data/seedData';
+import { INITIAL_BED_SIZES } from '../data/seedData';
 import { 
   Layers, 
   Search, 
@@ -13,15 +13,17 @@ import {
   TrendingDown, 
   Package, 
   X,
-  Edit2
+  Edit2,
+  Tag
 } from 'lucide-react';
 
 interface InventoryViewProps {
   onOpenNewOrder: () => void;
+  onOpenCategoryManager?: () => void;
 }
 
-export const InventoryView: React.FC<InventoryViewProps> = ({ onOpenNewOrder }) => {
-  const { products, manufacturers, updateStock, addProduct, updateProduct, getLatestPrice, getManufacturerById } = useStore();
+export const InventoryView: React.FC<InventoryViewProps> = ({ onOpenNewOrder, onOpenCategoryManager }) => {
+  const { products, manufacturers, categories, updateStock, addProduct, updateProduct, getLatestPrice, getManufacturerById } = useStore();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('todas');
   const [selectedBedSize, setSelectedBedSize] = useState<string>('todas');
@@ -160,6 +162,15 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ onOpenNewOrder }) 
         </div>
 
         <div className="flex items-center gap-2.5">
+          {onOpenCategoryManager && (
+            <button
+              onClick={onOpenCategoryManager}
+              className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+            >
+              <Tag className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              Gestionar Categorías
+            </button>
+          )}
           <button
             onClick={() => setIsAddingProduct(true)}
             className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
@@ -240,7 +251,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ onOpenNewOrder }) 
               className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
             >
               <option value="todas">Todas las categorías</option>
-              {TEXTILE_CATEGORIES.map(c => (
+              {categories.map(c => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>
@@ -463,13 +474,24 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ onOpenNewOrder }) 
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Categoría Textil</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300">Categoría Textil *</label>
+                    {onOpenCategoryManager && (
+                      <button
+                        type="button"
+                        onClick={onOpenCategoryManager}
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer font-medium"
+                      >
+                        + Nueva
+                      </button>
+                    )}
+                  </div>
                   <select
                     value={newProd.category}
                     onChange={e => setNewProd(prev => ({ ...prev, category: e.target.value as TextileCategory }))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                   >
-                    {TEXTILE_CATEGORIES.map(c => (
+                    {categories.map(c => (
                       <option key={c.id} value={c.id}>{c.label}</option>
                     ))}
                   </select>

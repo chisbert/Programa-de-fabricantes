@@ -1,7 +1,7 @@
 import React, { useState, useId } from 'react';
 import { useStore } from '../context/StoreContext';
 import { BedSize, PurchaseOrderItem, TextileCategory } from '../types';
-import { TEXTILE_CATEGORIES, INITIAL_BED_SIZES } from '../data/seedData';
+import { INITIAL_BED_SIZES } from '../data/seedData';
 import { 
   X, 
   Plus, 
@@ -13,7 +13,8 @@ import {
   Save, 
   Sparkles,
   CheckCircle2,
-  PackagePlus
+  PackagePlus,
+  Calendar
 } from 'lucide-react';
 
 interface NewOrderModalProps {
@@ -27,7 +28,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   onClose,
   onOrderCreated,
 }) => {
-  const { manufacturers, products, addOrder, addProduct, getLatestPriceByMfg } = useStore();
+  const { manufacturers, products, categories, addCategory, addOrder, addProduct, getLatestPriceByMfg } = useStore();
 
   const [selectedMfgId, setSelectedMfgId] = useState<string>(manufacturers[0]?.id || '');
   const [orderDate, setOrderDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
@@ -46,6 +47,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   const [newProdRef, setNewProdRef] = useState('');
   const [newProdCategory, setNewProdCategory] = useState<TextileCategory>('sabanas');
   const [newProdComposition, setNewProdComposition] = useState('100% Algodón');
+  const [isInlineAddingCat, setIsInlineAddingCat] = useState(false);
+  const [inlineCatName, setInlineCatName] = useState('');
 
   // Order items draft lines
   interface DraftItem {
@@ -130,15 +133,16 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
   // Quick product creation
   const handleSaveQuickProduct = () => {
-    if (!newProdName.trim() || !newProdRef.trim()) {
+    if (!newProdName.trim()) {
       return;
     }
+    const autoRef = (selectedMfg?.code || 'ART') + '-' + Math.floor(100 + Math.random() * 900);
     const created = addProduct({
-      ref: newProdRef.toUpperCase().trim(),
+      ref: autoRef,
       name: newProdName.trim(),
       category: newProdCategory,
       manufacturerId: selectedMfgId,
-      composition: newProdComposition.trim(),
+      composition: newProdComposition.trim() || '100% Algodón',
       availableSizes: INITIAL_BED_SIZES,
       stockBySize: { '90': 0, '105': 0, '135': 0, '150': 0, '160': 0, '180': 0, '200': 0 },
       minStockBySize: { '90': 2, '105': 2, '135': 3, '150': 4, '160': 2, '180': 2, '200': 1 },
@@ -155,7 +159,6 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
     setIsCreatingProduct(false);
     setNewProdName('');
-    setNewProdRef('');
   };
 
   // Calculations - Comunidad de Bienes (Recargo de Equivalencia 26.2%)
@@ -375,37 +378,78 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Referencia / SKU</label>
-                    <input
-                      type="text"
-                      placeholder="Ej. RM-COL-2026"
-                      value={newProdRef}
-                      onChange={e => setNewProdRef(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded font-mono dark:text-white"
-                    />
-                  </div>
                   <div className="sm:col-span-2">
-                    <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Nombre de la prenda</label>
+                    <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      Nombre del artículo / prenda *
+                    </label>
                     <input
                       type="text"
-                      placeholder="Ej. Juego de Sábanas Satén Rayas"
+                      required
+                      placeholder="Ej. Juego de Sábanas Satén 300 Hilos"
                       value={newProdName}
                       onChange={e => setNewProdName(e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400">Categoría</label>
-                    <select
-                      value={newProdCategory}
-                      onChange={e => setNewProdCategory(e.target.value as TextileCategory)}
+                    <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                      Tejido / Composición
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej. 100% Algodón Peinado"
+                      value={newProdComposition}
+                      onChange={e => setNewProdComposition(e.target.value)}
                       className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
-                    >
-                      {TEXTILE_CATEGORIES.map(c => (
-                        <option key={c.id} value={c.id}>{c.label}</option>
-                      ))}
-                    </select>
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">Categoría</label>
+                      <button
+                        type="button"
+                        onClick={() => setIsInlineAddingCat(!isInlineAddingCat)}
+                        className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                      >
+                        {isInlineAddingCat ? 'Cancelar' : '+ Nueva'}
+                      </button>
+                    </div>
+
+                    {isInlineAddingCat ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          placeholder="Nombre categoría..."
+                          value={inlineCatName}
+                          onChange={e => setInlineCatName(e.target.value)}
+                          className="w-full px-2 py-1 text-xs bg-white dark:bg-slate-900 border border-blue-400 rounded dark:text-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (inlineCatName.trim()) {
+                              const created = addCategory({ label: inlineCatName.trim() });
+                              setNewProdCategory(created.id);
+                              setInlineCatName('');
+                              setIsInlineAddingCat(false);
+                            }
+                          }}
+                          className="px-2 py-1 bg-blue-600 text-white text-xs font-bold rounded"
+                        >
+                          OK
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={newProdCategory}
+                        onChange={e => setNewProdCategory(e.target.value)}
+                        className="w-full px-2.5 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
+                      >
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>{c.label}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
@@ -426,17 +470,17 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
                     <tr>
-                      <th className="py-2.5 px-3 font-semibold">Prenda / Modelo ({selectedMfg?.name})</th>
-                      <th className="py-2.5 px-3 font-semibold w-28">Medida Cama</th>
-                      <th className="py-2.5 px-3 font-semibold w-20 text-right">Uds.</th>
-                      <th className="py-2.5 px-3 font-semibold w-28 text-right">Coste Ud. (€)</th>
-                      <th className="py-2.5 px-3 font-semibold w-36 text-center">Variación Coste</th>
-                      <th className="py-2.5 px-3 font-semibold w-24 text-right">Subtotal</th>
+                      <th className="py-2.5 px-3 font-semibold">Artículo ({selectedMfg?.name || 'Fabricante'})</th>
+                      <th className="py-2.5 px-3 font-semibold w-28 text-center">Medida</th>
+                      <th className="py-2.5 px-3 font-semibold w-24 text-right">Uds. Compradas</th>
+                      <th className="py-2.5 px-3 font-semibold w-28 text-right">Precio Coste (€)</th>
+                      <th className="py-2.5 px-3 font-semibold w-28 text-right">Total (€)</th>
+                      <th className="py-2.5 px-3 font-semibold w-48 text-center">Última Compra</th>
                       <th className="py-2.5 px-2 w-10 text-center"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                    {items.map((line, index) => {
+                    {items.map((line) => {
                       const prevPrice = line.productId 
                         ? getLatestPriceByMfg(selectedMfgId, line.productId, line.bedSize)
                         : null;
@@ -450,19 +494,29 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                         priceDelta = { diff, pct };
                       }
 
+                      // Format date to DD/MM/AAAA
+                      const formatLastPurchaseDate = (dateStr: string) => {
+                        if (!dateStr) return '';
+                        const parts = dateStr.split('-');
+                        if (parts.length === 3) {
+                          return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                        }
+                        return dateStr;
+                      };
+
                       return (
                         <tr key={line.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
-                          {/* Product select */}
+                          {/* Product select - without [REF] */}
                           <td className="py-2 px-3">
                             <select
                               value={line.productId}
                               onChange={e => handleItemChange(line.id, 'productId', e.target.value)}
-                              className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white"
+                              className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white font-medium"
                             >
                               <option value="">-- Seleccionar artículo --</option>
                               {availableProducts.map(p => (
                                 <option key={p.id} value={p.id}>
-                                  [{p.ref}] {p.name}
+                                  {p.name}
                                 </option>
                               ))}
                             </select>
@@ -473,15 +527,15 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                             <select
                               value={line.bedSize}
                               onChange={e => handleItemChange(line.id, 'bedSize', e.target.value)}
-                              className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white font-medium"
+                              className="w-full px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white font-medium text-center"
                             >
-                              <option value="90">Cama 90</option>
-                              <option value="105">Cama 105</option>
-                              <option value="135">Cama 135</option>
-                              <option value="150">Cama 150</option>
-                              <option value="160">Cama 160</option>
-                              <option value="180">Cama 180</option>
-                              <option value="200">Cama 200</option>
+                              <option value="90">90 cm</option>
+                              <option value="105">105 cm</option>
+                              <option value="135">135 cm</option>
+                              <option value="150">150 cm</option>
+                              <option value="160">160 cm</option>
+                              <option value="180">180 cm</option>
+                              <option value="200">200 cm</option>
                               <option value="Especial">Especial</option>
                             </select>
                           </td>
@@ -514,39 +568,41 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                             </div>
                           </td>
 
-                          {/* Real-time cost comparison with previous purchase */}
-                          <td className="py-2 px-3 text-center">
-                            {priceDelta ? (
-                              priceDelta.diff > 0.05 ? (
-                                <div className="inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded">
-                                  <TrendingUp className="w-3 h-3 text-amber-600" />
-                                  <span>+{priceDelta.diff.toFixed(2)}€ ({priceDelta.pct > 0 ? `+${priceDelta.pct.toFixed(1)}%` : ''})</span>
-                                </div>
-                              ) : priceDelta.diff < -0.05 ? (
-                                <div className="inline-flex items-center gap-1 text-[11px] text-emerald-700 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded">
-                                  <TrendingDown className="w-3 h-3 text-emerald-600" />
-                                  <span>{priceDelta.diff.toFixed(2)}€ ({priceDelta.pct.toFixed(1)}%)</span>
-                                </div>
-                              ) : (
-                                <div className="inline-flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400">
-                                  <Minus className="w-3 h-3" />
-                                  <span>Sin variación</span>
-                                </div>
-                              )
-                            ) : prevPrice ? (
-                              <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                                Previo: {prevPrice.unitCost.toFixed(2)}€
-                              </span>
-                            ) : (
-                              <span className="text-[11px] text-blue-500 dark:text-blue-400">
-                                Primera compra
-                              </span>
-                            )}
+                          {/* Total line (Quantity * Unit Cost) */}
+                          <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums text-sm">
+                            {lineTotal.toFixed(2)} €
                           </td>
 
-                          {/* Line total */}
-                          <td className="py-2 px-3 text-right font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
-                            {lineTotal.toFixed(2)} €
+                          {/* Cuándo fue la última compra & variación */}
+                          <td className="py-2 px-3 text-center">
+                            {prevPrice ? (
+                              <div className="flex flex-col items-center justify-center text-[11px] leading-tight">
+                                <div className="flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300">
+                                  <Calendar className="w-3 h-3 text-slate-400" />
+                                  <span>{formatLastPurchaseDate(prevPrice.date)}</span>
+                                  <span className="text-slate-500 font-mono">({prevPrice.unitCost.toFixed(2)} €)</span>
+                                </div>
+                                {priceDelta && Math.abs(priceDelta.diff) > 0.02 && (
+                                  <div className="mt-0.5">
+                                    {priceDelta.diff > 0 ? (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 dark:text-amber-400 font-semibold bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.2 rounded">
+                                        <TrendingUp className="w-2.5 h-2.5" />
+                                        +{priceDelta.diff.toFixed(2)}€ ({priceDelta.pct > 0 ? `+${priceDelta.pct.toFixed(0)}%` : ''})
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded">
+                                        <TrendingDown className="w-2.5 h-2.5" />
+                                        {priceDelta.diff.toFixed(2)}€ ({priceDelta.pct.toFixed(0)}%)
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center text-[11px] text-slate-400 dark:text-slate-500 italic">
+                                Sin compras previas
+                              </span>
+                            )}
                           </td>
 
                           {/* Delete button */}
@@ -648,7 +704,13 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         {/* Modal Footer */}
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 shrink-0">
           <div className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
-            {selectedMfg?.name}: entrega estimada en ~{selectedMfg?.deliveryDays || 3} días laborables.
+            {selectedMfg && (
+              <span>
+                {selectedMfg.name}
+                {selectedMfg.salesRepName ? ` · Rep: ${selectedMfg.salesRepName}` : ''}
+                {selectedMfg.orderEmail || selectedMfg.phone ? ` (${selectedMfg.orderEmail || selectedMfg.phone})` : ''}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button

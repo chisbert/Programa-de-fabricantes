@@ -47,7 +47,7 @@ Abre la terminal en la carpeta del proyecto y escribe estos dos comandos:
 
 1. Instalar dependencias (solo la primera vez):
    ```bash
-   npm install
+   npm install --legacy-peer-deps
    ```
 
 2. Arrancar la aplicación:

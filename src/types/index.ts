@@ -1,32 +1,28 @@
 export type BedSize = '90' | '105' | '135' | '150' | '160' | '180' | '200' | 'Especial';
 
-export type TextileCategory = 
-  | 'sabanas'
-  | 'fundas_nordicas'
-  | 'colchas_edredones'
-  | 'rellenos_nordicos'
-  | 'almohadas_fundas'
-  | 'protectores_cubrecolchones'
-  | 'mantas_plaids';
+export type TextileCategory = string;
 
 export interface CategoryInfo {
-  id: TextileCategory;
+  id: string;
   label: string;
-  description: string;
-  typicalSizes: BedSize[];
+  description?: string;
+  typicalSizes?: BedSize[];
+  isCustom?: boolean;
 }
 
 export interface Manufacturer {
   id: string;
   name: string;
+  code?: string;
   cif?: string;
-  code: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  city: string;
-  paymentTerms: string;
-  deliveryDays: number;
+  salesRepName?: string;
+  salesRepPhone?: string;
+  phone?: string;
+  orderEmail?: string;
+  email?: string;
+  contactPerson?: string;
+  city?: string;
+  paymentTerms?: string;
   notes?: string;
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useStore } from '../context/StoreContext';
 import { PurchaseOrder } from '../types';
 import { 
@@ -9,13 +9,14 @@ import {
   Search, 
   Filter, 
   Download, 
+  Upload, 
   ChevronDown, 
   ChevronUp, 
   FileText, 
   TrendingUp, 
   TrendingDown, 
-  CheckCircle2,
-  AlertCircle
+  CheckCircle2, 
+  AlertCircle 
 } from 'lucide-react';
 
 interface OrderHistoryViewProps {
@@ -27,12 +28,35 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
   onOpenNewOrder,
   selectedOrderId,
 }) => {
-  const { orders, manufacturers, deleteOrder, getManufacturerById, addOrder, exportOrdersToCsv } = useStore();
+  const { orders, manufacturers, deleteOrder, getManufacturerById, addOrder, exportOrdersToCsv, importSingleOrderJson } = useStore();
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadMessage, setUploadMessage] = useState<{ text: string; isError?: boolean } | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(selectedOrderId || (orders[0]?.id || null));
   const [filterMfg, setFilterMfg] = useState<string>('todos');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      const res = importSingleOrderJson(content);
+      if (res.success) {
+        setUploadMessage({ text: res.message });
+        if (res.order) {
+          setExpandedOrderId(res.order.id);
+        }
+      } else {
+        setUploadMessage({ text: res.message, isError: true });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   // Filter orders
   const filteredOrders = orders.filter(order => {
@@ -86,12 +110,27 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept=".json,.csv"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+            title="Importar un archivo de pedido o albarán guardado en tu ordenador o carpeta"
+          >
+            <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            Importar Albarán
+          </button>
           <button
             onClick={exportOrdersToCsv}
-            className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+            className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
-            Descargar CSV para Excel
+            Descargar CSV
           </button>
           <button
             onClick={onOpenNewOrder}
@@ -102,6 +141,26 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Upload Feedback banner */}
+      {uploadMessage && (
+        <div className={`p-3 rounded-lg text-xs flex items-center justify-between gap-2 ${
+          uploadMessage.isError 
+            ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900' 
+            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900'
+        }`}>
+          <div className="flex items-center gap-2">
+            {uploadMessage.isError ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
+            <span>{uploadMessage.text}</span>
+          </div>
+          <button 
+            onClick={() => setUploadMessage(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {/* Filter row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-xs">
@@ -203,13 +262,12 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                       <table className="w-full text-left text-xs border-collapse">
                         <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
                           <tr>
-                            <th className="py-2.5 px-3 font-semibold">Referencia</th>
-                            <th className="py-2.5 px-3 font-semibold">Prenda / Modelo</th>
-                            <th className="py-2.5 px-3 font-semibold text-center">Medida Cama</th>
-                            <th className="py-2.5 px-3 font-semibold text-right">Cantidad</th>
-                            <th className="py-2.5 px-3 font-semibold text-right">Coste Unitario (€)</th>
-                            <th className="py-2.5 px-3 font-semibold text-center">Variación</th>
-                            <th className="py-2.5 px-3 font-semibold text-right">Total Línea</th>
+                            <th className="py-2.5 px-3 font-semibold">Artículo</th>
+                            <th className="py-2.5 px-3 font-semibold text-center w-28">Medida</th>
+                            <th className="py-2.5 px-3 font-semibold text-right w-24">Cantidad</th>
+                            <th className="py-2.5 px-3 font-semibold text-right w-28">Precio Coste (€)</th>
+                            <th className="py-2.5 px-3 font-semibold text-right w-28">Total Línea</th>
+                            <th className="py-2.5 px-3 font-semibold text-center w-36">Variación</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900">
@@ -225,15 +283,12 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
 
                             return (
                               <tr key={item.id || idx} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                                <td className="py-2.5 px-3 font-mono font-medium text-slate-600 dark:text-slate-300">
-                                  {item.ref}
-                                </td>
                                 <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
                                   {item.productName}
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
-                                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-semibold font-mono text-slate-700 dark:text-slate-300">
-                                    Cama {item.bedSize}
+                                  <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-semibold text-slate-700 dark:text-slate-300">
+                                    {item.bedSize === 'Especial' ? 'Especial' : `${item.bedSize} cm`}
                                   </span>
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white tabular-nums">
@@ -241,6 +296,9 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
                                   {item.unitCost.toFixed(2)} €
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums">
+                                  {lineTotal.toFixed(2)} €
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
                                   {delta ? (
@@ -258,9 +316,6 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                   ) : (
                                     <span className="text-[11px] text-slate-400">1ª Compra</span>
                                   )}
-                                </td>
-                                <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums">
-                                  {lineTotal.toFixed(2)} €
                                 </td>
                               </tr>
                             );

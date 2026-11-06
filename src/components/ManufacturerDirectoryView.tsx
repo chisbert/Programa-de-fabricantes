@@ -6,7 +6,7 @@ import {
   Phone, 
   Mail, 
   MapPin, 
-  Clock, 
+  User, 
   CreditCard, 
   Plus, 
   ChevronRight, 
@@ -36,11 +36,12 @@ export const ManufacturerDirectoryView: React.FC<ManufacturerDirectoryViewProps>
     name: '',
     code: '',
     city: '',
-    contactPerson: '',
+    salesRepName: '',
+    salesRepPhone: '',
     phone: '',
+    orderEmail: '',
     email: '',
-    paymentTerms: 'Giro a 30 días',
-    deliveryDays: 3,
+    paymentTerms: '',
     notes: '',
   });
 
@@ -78,7 +79,6 @@ export const ManufacturerDirectoryView: React.FC<ManufacturerDirectoryViewProps>
       if (!s) return;
       s.totalSpend += order.total;
       s.orderCount += 1;
-
       order.items.forEach(item => {
         s.totalUnits += item.quantity;
         const key = `${item.productId}-${item.bedSize}`;
@@ -110,28 +110,34 @@ export const ManufacturerDirectoryView: React.FC<ManufacturerDirectoryViewProps>
 
   const handleOpenEdit = (mfg: Manufacturer) => {
     setEditingMfgId(mfg.id);
-    setFormData(mfg);
+    setFormData({
+      ...mfg,
+      orderEmail: mfg.orderEmail || mfg.email || '',
+    });
   };
 
   const handleSaveMfg = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name?.trim()) return;
 
+    const mfgPayload = {
+      name: formData.name.trim(),
+      code: formData.code?.toUpperCase().trim() || formData.name.slice(0, 3).toUpperCase(),
+      city: formData.city?.trim() || '',
+      salesRepName: formData.salesRepName?.trim() || '',
+      salesRepPhone: formData.salesRepPhone?.trim() || '',
+      phone: formData.phone?.trim() || '',
+      orderEmail: formData.orderEmail?.trim() || formData.email?.trim() || '',
+      email: formData.email?.trim() || formData.orderEmail?.trim() || '',
+      paymentTerms: formData.paymentTerms?.trim() || '',
+      notes: formData.notes?.trim() || '',
+    };
+
     if (editingMfgId) {
-      updateManufacturer(editingMfgId, formData);
+      updateManufacturer(editingMfgId, mfgPayload);
       setEditingMfgId(null);
     } else {
-      const created = addManufacturer({
-        name: formData.name.trim(),
-        code: formData.code?.toUpperCase().trim() || formData.name.slice(0, 3).toUpperCase(),
-        city: formData.city?.trim() || 'España',
-        contactPerson: formData.contactPerson?.trim() || '',
-        phone: formData.phone?.trim() || '',
-        email: formData.email?.trim() || '',
-        paymentTerms: formData.paymentTerms || 'Giro 30 días',
-        deliveryDays: Number(formData.deliveryDays) || 3,
-        notes: formData.notes?.trim() || '',
-      });
+      const created = addManufacturer(mfgPayload);
       setSelectedMfgId(created.id);
       setIsAddingMfg(false);
     }
@@ -160,11 +166,13 @@ export const ManufacturerDirectoryView: React.FC<ManufacturerDirectoryViewProps>
               name: '',
               code: '',
               city: '',
-              contactPerson: '',
+              salesRepName: '',
+              salesRepPhone: '',
               phone: '',
+              orderEmail: '',
               email: '',
-              paymentTerms: 'Giro a 30 días',
-              deliveryDays: 3,
+              paymentTerms: '',
+              notes: '',
             });
             setIsAddingMfg(true);
           }}
@@ -196,91 +204,127 @@ export const ManufacturerDirectoryView: React.FC<ManufacturerDirectoryViewProps>
 
             <form onSubmit={handleSaveMfg} className="space-y-3 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Nombre Comercial *</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Nombre Comercial del Fabricante *
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Textils Morera"
+                  placeholder="Ej. Reig Martí, Bassols..."
                   value={formData.name || ''}
                   onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                 />
+                <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  Único campo obligatorio. El resto de datos puedes completarlos ahora o más tarde.
+                </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Representante & Teléfono Representante */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Código / Sigla</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Representante / Comercial
+                  </label>
                   <input
                     type="text"
-                    placeholder="Ej. MOR"
-                    value={formData.code || ''}
-                    onChange={e => setFormData(prev => ({ ...prev, code: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white font-mono"
+                    placeholder="Ej. Vicente Reig"
+                    value={formData.salesRepName || ''}
+                    onChange={e => setFormData(prev => ({ ...prev, salesRepName: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Ciudad / Sede</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Teléfono del Representante
+                  </label>
                   <input
-                    type="text"
-                    placeholder="Ej. Ontinyent"
-                    value={formData.city || ''}
-                    onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                    type="tel"
+                    placeholder="Ej. 629 11 22 33"
+                    value={formData.salesRepPhone || ''}
+                    onChange={e => setFormData(prev => ({ ...prev, salesRepPhone: e.target.value }))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Teléfono Fabricante & Email Pedidos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Teléfono</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Teléfono del Fabricante (Oficina)
+                  </label>
                   <input
-                    type="text"
-                    placeholder="+34 96..."
+                    type="tel"
+                    placeholder="Ej. +34 962 91 70 00"
                     value={formData.phone || ''}
                     onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Email Pedidos</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Email de Pedidos
+                  </label>
                   <input
                     type="email"
-                    placeholder="pedidos@..."
-                    value={formData.email || ''}
-                    onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="Ej. pedidos@reigmarti.com"
+                    value={formData.orderEmail || formData.email || ''}
+                    onChange={e => setFormData(prev => ({ ...prev, orderEmail: e.target.value, email: e.target.value }))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Ciudad & Código */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Condición de Pago</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Ciudad / Sede
+                  </label>
                   <input
                     type="text"
-                    placeholder="Ej. Giro 60 días"
-                    value={formData.paymentTerms || ''}
-                    onChange={e => setFormData(prev => ({ ...prev, paymentTerms: e.target.value }))}
+                    placeholder="Ej. Ontinyent (Valencia)"
+                    value={formData.city || ''}
+                    onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Plazo Entrega (Días)</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                    Código / Sigla
+                  </label>
                   <input
-                    type="number"
-                    min="1"
-                    value={formData.deliveryDays || 3}
-                    onChange={e => setFormData(prev => ({ ...prev, deliveryDays: parseInt(e.target.value) || 3 }))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
+                    type="text"
+                    placeholder="Ej. RM"
+                    value={formData.code || ''}
+                    onChange={e => setFormData(prev => ({ ...prev, code: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white font-mono"
                   />
                 </div>
+              </div>
+
+              {/* Condición de Pago */}
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Condición de Pago
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Giro 60 días, Transferencia 30 días..."
+                  value={formData.paymentTerms || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, paymentTerms: e.target.value }))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
+                />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Observaciones</label>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Observaciones
+                </label>
                 <textarea
                   rows={2}
-                  placeholder="Gama de producto, comerciales, descuento comercial acordado..."
+                  placeholder="Especialidades textiles, catálogo de temporada, acuerdos de descuento..."
                   value={formData.notes || ''}
                   onChange={e => setFormData(prev => ({ ...prev, notes: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded dark:text-white"
@@ -338,9 +382,18 @@ export const ManufacturerDirectoryView: React.FC<ManufacturerDirectoryViewProps>
                       <div className="font-bold text-sm text-slate-900 dark:text-white">
                         {mfg.name}
                       </div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
-                        <MapPin className="w-3 h-3 text-slate-400" />
-                        <span>{mfg.city}</span>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex flex-wrap items-center gap-1.5">
+                        {mfg.city && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-slate-400" />
+                            <span>{mfg.city}</span>
+                          </span>
+                        )}
+                        {mfg.salesRepName && (
+                          <span>
+                            {mfg.city ? '· ' : ''}Rep: <strong className="font-medium text-slate-700 dark:text-slate-300">{mfg.salesRepName}</strong>
+                          </span>
+                        )}
                       </div>
                     </div>
                     <ChevronRight className={`w-4 h-4 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-300'}`} />
@@ -398,41 +451,78 @@ export const ManufacturerDirectoryView: React.FC<ManufacturerDirectoryViewProps>
                 </div>
 
                 {/* Contact & Terms Strip */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* 1. Representante & Tel. Representante */}
                   <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <CreditCard className="w-3 h-3" /> Condición Pago
+                    <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                      <User className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Representante
                     </span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 mt-1 block">
-                      {selectedMfg.paymentTerms}
+                    <span className="font-semibold text-slate-900 dark:text-white mt-1 block truncate">
+                      {selectedMfg.salesRepName || 'No indicado'}
                     </span>
+                    {selectedMfg.salesRepPhone ? (
+                      <a
+                        href={`tel:${selectedMfg.salesRepPhone}`}
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline mt-0.5 inline-flex items-center gap-1 font-mono font-medium"
+                      >
+                        <Phone className="w-3 h-3" />
+                        {selectedMfg.salesRepPhone}
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 mt-0.5 block">Sin teléfono</span>
+                    )}
                   </div>
 
+                  {/* 2. Teléfono Fabricante */}
                   <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Tiempo Entrega
+                    <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                      <Phone className="w-3.5 h-3.5 text-slate-500" /> Teléfono Fabricante
                     </span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 mt-1 block">
-                      ~{selectedMfg.deliveryDays} días laborables
-                    </span>
+                    {selectedMfg.phone ? (
+                      <a
+                        href={`tel:${selectedMfg.phone}`}
+                        className="font-semibold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 mt-1 block font-mono"
+                      >
+                        {selectedMfg.phone}
+                      </a>
+                    ) : (
+                      <span className="font-semibold text-slate-400 mt-1 block">
+                        No registrado
+                      </span>
+                    )}
+                    <span className="text-[11px] text-slate-400 mt-0.5 block">Oficina / Central</span>
                   </div>
 
+                  {/* 3. Email Pedidos */}
                   <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <Phone className="w-3 h-3" /> Teléfono
+                    <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                      <Mail className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Email de Pedidos
                     </span>
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 mt-1 block">
-                      {selectedMfg.phone || 'No registrado'}
-                    </span>
+                    {selectedMfg.orderEmail || selectedMfg.email ? (
+                      <a
+                        href={`mailto:${selectedMfg.orderEmail || selectedMfg.email}`}
+                        className="font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-1 block truncate"
+                        title={selectedMfg.orderEmail || selectedMfg.email}
+                      >
+                        {selectedMfg.orderEmail || selectedMfg.email}
+                      </a>
+                    ) : (
+                      <span className="font-semibold text-slate-400 mt-1 block">
+                        No registrado
+                      </span>
+                    )}
+                    <span className="text-[11px] text-slate-400 mt-0.5 block">Para envío de albaranes</span>
                   </div>
 
+                  {/* 4. Condición de Pago */}
                   <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <span className="text-slate-400 flex items-center gap-1">
-                      <Mail className="w-3 h-3" /> Email Pedidos
+                    <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+                      <CreditCard className="w-3.5 h-3.5 text-slate-500" /> Condición de Pago
                     </span>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 mt-1 block truncate">
-                      {selectedMfg.email || 'No registrado'}
+                      {selectedMfg.paymentTerms || 'Sin especificar'}
                     </span>
+                    <span className="text-[11px] text-slate-400 mt-0.5 block">Acuerdo comercial</span>
                   </div>
                 </div>
               </div>

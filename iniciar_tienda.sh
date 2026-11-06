@@ -4,9 +4,9 @@ echo "  Iniciando TramaHogar (Gestión de Ropa de Hogar)"
 echo "========================================================"
 echo ""
 
-if [ ! -d "node_modules" ]; then
-    echo "Instalando dependencias por primera vez..."
-    npm install
+if [ ! -d "node_modules/@tailwindcss/vite" ]; then
+    echo "Instalando dependencias necesarias (por favor espera un momento)..."
+    npm install --legacy-peer-deps || npm install --force
     echo ""
 fi
 

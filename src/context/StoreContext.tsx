@@ -6,12 +6,14 @@ import {
   PurchaseOrderItem, 
   BedSize, 
   TextileCategory, 
+  CategoryInfo,
   PriceRecord 
 } from '../types';
 import { 
   INITIAL_MANUFACTURERS, 
   INITIAL_PRODUCTS, 
-  INITIAL_ORDERS 
+  INITIAL_ORDERS,
+  TEXTILE_CATEGORIES 
 } from '../data/seedData';
 import { 
   fileSystemService, 
@@ -39,11 +41,20 @@ interface StoreContextType {
   selectDesktopFolder: () => Promise<boolean>;
   disconnectDesktopFolder: () => Promise<void>;
   syncToDesktopFolder: () => Promise<{ success: boolean; message?: string }>;
+  loadFromDesktopFolder: () => Promise<{ success: boolean; message: string }>;
   toggleAutoSaveToFolder: (enabled: boolean) => void;
+
+  // Categories
+  categories: CategoryInfo[];
+  addCategory: (cat: { label: string; description?: string }) => CategoryInfo;
+  updateCategory: (id: string, updated: Partial<CategoryInfo>) => void;
+  deleteCategory: (id: string) => { success: boolean; message?: string };
+  getCategoryById: (id: string) => CategoryInfo | undefined;
 
   // CRUD actions
   addOrder: (orderData: Omit<PurchaseOrder, 'id' | 'createdAt'>) => PurchaseOrder;
   deleteOrder: (id: string) => void;
+  importSingleOrderJson: (jsonOrText: string) => { success: boolean; message: string; order?: PurchaseOrder };
   addProduct: (productData: Omit<Product, 'id'>) => Product;
   updateProduct: (id: string, updated: Partial<Product>) => void;
   addManufacturer: (mfgData: Omit<Manufacturer, 'id'>) => Manufacturer;
@@ -73,6 +84,7 @@ const STORAGE_KEYS = {
   MFGS: 'tramahogar_manufacturers_v1',
   PRODS: 'tramahogar_products_v1',
   ORDERS: 'tramahogar_orders_v1',
+  CATEGORIES: 'tramahogar_categories_v1',
   AUTOSAVE: 'tramahogar_autosave_folder_v1',
 };
 
@@ -113,6 +125,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
     } catch {
       return INITIAL_ORDERS;
+    }
+  });
+
+  const [categories, setCategories] = useState<CategoryInfo[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+      return saved ? JSON.parse(saved) : TEXTILE_CATEGORIES;
+    } catch {
+      return TEXTILE_CATEGORIES;
     }
   });
 
@@ -221,6 +242,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         taxRegime: 'Comunidad de Bienes - Recargo de Equivalencia (26.2%)',
         manufacturers,
         products,
+        categories,
         orders,
       };
 
@@ -263,17 +285,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         errorMessage: null,
       }));
 
-      // Immediately write files
-      const backupData = {
-        exportDate: new Date().toISOString(),
-        appName: 'TramaHogar',
-        taxRegime: 'Comunidad de Bienes - Recargo de Equivalencia (26.2%)',
-        manufacturers,
-        products,
-        orders,
-      };
-      const csvContent = buildCsvContent();
-      await fileSystemService.writeFilesToDirectory(handle, backupData, csvContent);
+      // Check if the chosen folder already contains store data
+      const existingData = await fileSystemService.readDataFromDirectory(handle);
+      if (existingData && (existingData.orders || existingData.products || existingData.manufacturers)) {
+        importBackupJson(JSON.stringify(existingData));
+      } else {
+        // First time in folder: write current data
+        const backupData = {
+          exportDate: new Date().toISOString(),
+          appName: 'TramaHogar',
+          taxRegime: 'Comunidad de Bienes - Recargo de Equivalencia (26.2%)',
+          manufacturers,
+          products,
+          categories,
+          orders,
+        };
+        const csvContent = buildCsvContent();
+        await fileSystemService.writeFilesToDirectory(handle, backupData, csvContent);
+      }
 
       const nowStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLocalFolder(prev => ({
@@ -285,6 +314,52 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err: any) {
       alert(`No se pudo seleccionar la carpeta: ${err.message}`);
       return false;
+    }
+  };
+
+  // Explicitly load/reload data from the connected desktop folder
+  const loadFromDesktopFolder = async (): Promise<{ success: boolean; message: string }> => {
+    if (!dirHandleRef.current) {
+      return { success: false, message: 'No hay ninguna carpeta de escritorio seleccionada.' };
+    }
+
+    try {
+      const hasPerm = await fileSystemService.verifyPermission(dirHandleRef.current, false);
+      if (!hasPerm) {
+        return { success: false, message: 'Permiso de lectura denegado para la carpeta del escritorio.' };
+      }
+
+      const existingData = await fileSystemService.readDataFromDirectory(dirHandleRef.current);
+      if (!existingData) {
+        return { 
+          success: false, 
+          message: 'No se encontró el archivo "tramahogar_datos_tienda.json" en la carpeta seleccionada.' 
+        };
+      }
+
+      const success = importBackupJson(JSON.stringify(existingData));
+      if (!success) {
+        return { 
+          success: false, 
+          message: 'El archivo de datos encontrado en la carpeta no tiene un formato válido.' 
+        };
+      }
+
+      const nowStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLocalFolder(prev => ({
+        ...prev,
+        lastSyncTime: nowStr,
+      }));
+
+      const orderCount = existingData.orders?.length || 0;
+      const prodCount = existingData.products?.length || 0;
+
+      return { 
+        success: true, 
+        message: `Datos cargados con éxito desde la carpeta: ${orderCount} pedidos y ${prodCount} artículos actualizados.` 
+      };
+    } catch (err: any) {
+      return { success: false, message: `Error al leer de la carpeta: ${err.message}` };
     }
   };
 
@@ -325,6 +400,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error(e);
     }
   }, [products]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [categories]);
 
   useEffect(() => {
     try {
@@ -481,13 +564,51 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }));
   };
 
+  // Category management methods
+  const addCategory = (catData: { label: string; description?: string }): CategoryInfo => {
+    const slug = catData.label
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || `cat_${Date.now()}`;
+
+    const finalId = categories.some(c => c.id === slug) ? `${slug}_${Date.now()}` : slug;
+
+    const newCat: CategoryInfo = {
+      id: finalId,
+      label: catData.label.trim(),
+      description: catData.description?.trim() || '',
+      isCustom: true,
+    };
+    setCategories(prev => [...prev, newCat]);
+    return newCat;
+  };
+
+  const updateCategory = (id: string, updated: Partial<CategoryInfo>) => {
+    setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updated } : c));
+  };
+
+  const deleteCategory = (id: string): { success: boolean; message?: string } => {
+    const hasProducts = products.some(p => p.category === id);
+    if (hasProducts) {
+      return { success: false, message: 'No se puede eliminar la categoría porque hay prendas en el catálogo asignadas a ella.' };
+    }
+    setCategories(prev => prev.filter(c => c.id !== id));
+    return { success: true };
+  };
+
+  const getCategoryById = (id: string) => categories.find(c => c.id === id);
+
   const resetToSampleData = () => {
     setManufacturers(INITIAL_MANUFACTURERS);
     setProducts(INITIAL_PRODUCTS);
     setOrders(INITIAL_ORDERS);
+    setCategories(TEXTILE_CATEGORIES);
     localStorage.removeItem(STORAGE_KEYS.MFGS);
     localStorage.removeItem(STORAGE_KEYS.PRODS);
     localStorage.removeItem(STORAGE_KEYS.ORDERS);
+    localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
   };
 
   const exportBackupJson = () => {
@@ -498,6 +619,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       taxRegime: 'Comunidad de Bienes - Recargo de Equivalencia (26.2%)',
       manufacturers,
       products,
+      categories,
       orders,
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
@@ -516,11 +638,56 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setManufacturers(data.manufacturers);
         setProducts(data.products);
         setOrders(data.orders);
+        if (data.categories && Array.isArray(data.categories)) {
+          setCategories(data.categories);
+        }
         return true;
       }
       return false;
     } catch {
       return false;
+    }
+  };
+
+  const importSingleOrderJson = (jsonOrText: string): { success: boolean; message: string; order?: PurchaseOrder } => {
+    try {
+      const parsed = JSON.parse(jsonOrText);
+      // Check if it's a full backup
+      if (parsed.manufacturers && parsed.products && parsed.orders) {
+        const ok = importBackupJson(jsonOrText);
+        return ok 
+          ? { success: true, message: `Copia de seguridad cargada: ${parsed.orders.length} pedidos y ${parsed.products.length} prendas.` }
+          : { success: false, message: 'El archivo no tiene una estructura válida.' };
+      }
+
+      // Check if it's a single order object
+      if (parsed.orderNumber && Array.isArray(parsed.items) && parsed.items.length > 0) {
+        const mfgId = parsed.manufacturerId || manufacturers[0]?.id;
+        const today = new Date();
+        const newOrder = addOrder({
+          orderNumber: parsed.orderNumber,
+          orderDate: parsed.orderDate || today.toISOString().split('T')[0],
+          weekNumber: parsed.weekNumber || Math.ceil((((today.getTime() - new Date(today.getFullYear(), 0, 1).getTime()) / 86400000) + 1) / 7),
+          year: parsed.year || today.getFullYear(),
+          manufacturerId: mfgId,
+          status: parsed.status || 'recibido',
+          items: parsed.items,
+          discountPercentage: parsed.discountPercentage || 0,
+          vatRate: 26.2,
+          subtotal: parsed.subtotal || parsed.items.reduce((s: number, i: any) => s + (i.unitCost * i.quantity), 0),
+          total: parsed.total || Number(((parsed.subtotal || 0) * 1.262).toFixed(2)),
+          notes: parsed.notes || 'Pedido importado desde archivo.',
+        });
+        return { 
+          success: true, 
+          message: `Pedido ${newOrder.orderNumber} importado correctamente con ${newOrder.items.length} artículos.`,
+          order: newOrder 
+        };
+      }
+
+      return { success: false, message: 'El archivo no contiene un pedido con formato reconocido.' };
+    } catch (e: any) {
+      return { success: false, message: `Error al procesar el archivo: ${e.message}` };
     }
   };
 
@@ -538,6 +705,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <StoreContext.Provider
       value={{
+        categories,
+        addCategory,
+        updateCategory,
+        deleteCategory,
+        getCategoryById,
         manufacturers,
         products,
         orders,
@@ -546,9 +718,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         selectDesktopFolder,
         disconnectDesktopFolder,
         syncToDesktopFolder,
+        loadFromDesktopFolder,
         toggleAutoSaveToFolder,
         addOrder,
         deleteOrder,
+        importSingleOrderJson,
         addProduct,
         updateProduct,
         addManufacturer,

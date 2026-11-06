@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { BedSize, TextileCategory } from '../types';
-import { TEXTILE_CATEGORIES, INITIAL_BED_SIZES } from '../data/seedData';
+import { INITIAL_BED_SIZES } from '../data/seedData';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -10,15 +10,15 @@ import {
   SlidersHorizontal, 
   Calendar, 
   FileText, 
-  Calculator,
-  ChevronDown,
-  ChevronUp,
-  Download,
-  Info
+  Calculator, 
+  ChevronDown, 
+  ChevronUp, 
+  Download, 
+  Info 
 } from 'lucide-react';
 
 export const PriceComparatorView: React.FC = () => {
-  const { products, manufacturers, orders, priceRecords, getManufacturerById } = useStore();
+  const { products, manufacturers, orders, priceRecords, categories, getManufacturerById } = useStore();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('todas');
   const [selectedBedSize, setSelectedBedSize] = useState<string>('todas');
@@ -213,7 +213,7 @@ export const PriceComparatorView: React.FC = () => {
               className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
             >
               <option value="todas">Todas las categorías textiles</option>
-              {TEXTILE_CATEGORIES.map(c => (
+              {categories.map(c => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>

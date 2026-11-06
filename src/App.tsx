@@ -9,6 +9,7 @@ import { InventoryView } from './components/InventoryView';
 import { NewOrderModal } from './components/NewOrderModal';
 import { DataBackupModal } from './components/DataBackupModal';
 import { LocalFolderConfigModal } from './components/LocalFolderConfigModal';
+import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { ActiveTab } from './types';
 import { FolderPlus, FolderCheck } from 'lucide-react';
 
@@ -18,6 +19,7 @@ const AppContent: React.FC = () => {
   const [isNewOrderOpen, setIsNewOrderOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   // Dark mode setup
@@ -55,6 +57,7 @@ const AppContent: React.FC = () => {
         onOpenNewOrder={() => setIsNewOrderOpen(true)}
         onOpenBackup={() => setIsBackupOpen(true)}
         onOpenFolderConfig={() => setIsFolderModalOpen(true)}
+        onOpenCategories={() => setIsCategoryModalOpen(true)}
         darkMode={darkMode}
         toggleDarkMode={toggleDarkMode}
       />
@@ -127,6 +130,7 @@ const AppContent: React.FC = () => {
         {activeTab === 'inventario' && (
           <InventoryView
             onOpenNewOrder={() => setIsNewOrderOpen(true)}
+            onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
           />
         )}
       </main>
@@ -139,6 +143,11 @@ const AppContent: React.FC = () => {
           setSelectedOrderId(newId);
           setActiveTab('pedidos');
         }}
+      />
+
+      <CategoryManagerModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
       />
 
       <DataBackupModal
