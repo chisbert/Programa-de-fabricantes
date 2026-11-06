@@ -155,8 +155,8 @@ Archivos contenidos:
    - Contiene todas las compras por fabricante, prendas, medidas de cama y costes.
 
 2. "tramahogar_datos_tienda.json":
-   - Base de datos completa con tu catálogo, stock y pedidos.
-   - Se actualiza cada vez que guardas un pedido o cambias el inventario.
+   - Base de datos completa con tu catálogo de artículos, fabricantes y pedidos.
+   - Se actualiza automáticamente cada vez que guardas o modificas un albarán/pedido.
 
 Última sincronización: ${new Date().toLocaleString('es-ES')}
 `;

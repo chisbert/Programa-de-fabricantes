@@ -107,17 +107,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     });
   });
 
-  // Calculate low stock items across catalog
-  let lowStockCount = 0;
-  products.forEach(p => {
-    p.availableSizes.forEach(size => {
-      const stock = p.stockBySize[size] || 0;
-      const min = p.minStockBySize[size] || 0;
-      if (stock <= min) {
-        lowStockCount++;
-      }
-    });
-  });
+  // Count pending / in transit orders
+  const pendingOrdersCount = orders.filter(o => o.status !== 'recibido').length;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-150">
@@ -207,24 +198,22 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
 
-        {/* Card 4: Alertas de Stock Bajo */}
+        {/* Card 4: Pedidos y Albaranes */}
         <div className="p-5 bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <div className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            Reposición Recomendada
+            Albaranes Registrados
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className={`text-2xl font-bold font-mono tracking-tight tabular-nums ${
-              lowStockCount > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-white'
-            }`}>
-              {lowStockCount}
+            <span className="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white tabular-nums">
+              {orders.length}
             </span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">tallas bajo mínimo</span>
+            <span className="text-xs text-slate-500 dark:text-slate-400">pedidos en total</span>
           </div>
           <button
-            onClick={() => setActiveTab('inventario')}
+            onClick={() => setActiveTab('pedidos')}
             className="mt-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1"
           >
-            Ver tallas para pedir esta semana
+            {pendingOrdersCount > 0 ? `${pendingOrdersCount} pendiente(s) de entrega` : 'Ver historial completo'}
             <ArrowRight className="w-3 h-3" />
           </button>
         </div>

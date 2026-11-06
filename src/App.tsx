@@ -5,7 +5,6 @@ import { DashboardOverview } from './components/DashboardOverview';
 import { OrderHistoryView } from './components/OrderHistoryView';
 import { PriceComparatorView } from './components/PriceComparatorView';
 import { ManufacturerDirectoryView } from './components/ManufacturerDirectoryView';
-import { InventoryView } from './components/InventoryView';
 import { NewOrderModal } from './components/NewOrderModal';
 import { DataBackupModal } from './components/DataBackupModal';
 import { LocalFolderConfigModal } from './components/LocalFolderConfigModal';
@@ -126,13 +125,6 @@ const AppContent: React.FC = () => {
             onOpenNewOrder={() => setIsNewOrderOpen(true)}
           />
         )}
-
-        {activeTab === 'inventario' && (
-          <InventoryView
-            onOpenNewOrder={() => setIsNewOrderOpen(true)}
-            onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
-          />
-        )}
       </main>
 
       {/* Modals */}
@@ -164,7 +156,7 @@ const AppContent: React.FC = () => {
       <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
           <div>
-            TramaHogar · Sistema de Control de Compras Textil y Gestión de Inventario
+            TramaHogar · Sistema de Control de Compras Textil y Comparador de Costes
           </div>
           <div className="flex items-center gap-4">
             <span>Sábanas · Colchas · Edredones · Nórdicos</span>

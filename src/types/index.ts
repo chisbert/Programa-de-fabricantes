@@ -87,4 +87,4 @@ export interface PriceRecord {
   date: string;
 }
 
-export type ActiveTab = 'resumen' | 'nuevo_pedido' | 'pedidos' | 'comparador' | 'proveedores' | 'inventario';
+export type ActiveTab = 'resumen' | 'nuevo_pedido' | 'pedidos' | 'comparador' | 'proveedores';

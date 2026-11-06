@@ -5,7 +5,6 @@ import {
   Package, 
   TrendingUp, 
   Truck, 
-  Layers, 
   BarChart3, 
   PlusCircle, 
   Database,
@@ -111,18 +110,6 @@ export const Header: React.FC<HeaderProps> = ({
               <Truck className="w-4 h-4" />
               Fabricantes
             </button>
-
-            <button
-              onClick={() => setActiveTab('inventario')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
-                activeTab === 'inventario'
-                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 font-semibold'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              Inventario & Medidas
-            </button>
           </nav>
 
           {/* Zone 3: Primary Action + Utilities */}
@@ -227,16 +214,6 @@ export const Header: React.FC<HeaderProps> = ({
           }`}
         >
           Fabricantes
-        </button>
-        <button
-          onClick={() => setActiveTab('inventario')}
-          className={`px-2.5 py-1 text-xs font-medium rounded whitespace-nowrap ${
-            activeTab === 'inventario'
-              ? 'text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-800 font-semibold shadow-xs'
-              : 'text-slate-600 dark:text-slate-400'
-          }`}
-        >
-          Inventario
         </button>
       </div>
     </header>
