@@ -53,7 +53,10 @@ interface StoreContextType {
 
   // CRUD actions
   addOrder: (orderData: Omit<PurchaseOrder, 'id' | 'createdAt'>) => PurchaseOrder;
+  updateOrder: (id: string, updated: Partial<PurchaseOrder>) => void;
   deleteOrder: (id: string) => void;
+  updateOrderItemDelivery: (orderId: string, itemId: string, isReceived: boolean, receivedQuantity?: number) => void;
+  markAllOrderItemsReceived: (orderId: string, received: boolean) => void;
   importSingleOrderJson: (jsonOrText: string) => { success: boolean; message: string; order?: PurchaseOrder };
   addProduct: (productData: Omit<Product, 'id'>) => Product;
   updateProduct: (id: string, updated: Partial<Product>) => void;
@@ -110,18 +113,40 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [orders, setOrders] = useState<PurchaseOrder[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ORDERS);
-      if (!saved) return INITIAL_ORDERS;
-      const parsed: PurchaseOrder[] = JSON.parse(saved);
-      // Migración automática al 26.2% (IVA 21% + Recargo de Equivalencia 5.2%)
-      return parsed.map(o => {
+      const rawOrders: PurchaseOrder[] = saved ? JSON.parse(saved) : INITIAL_ORDERS;
+      // Normalización de IVA al 26.2% y estado de entrega de artículos
+      return rawOrders.map(o => {
+        let vat = o.vatRate;
+        let tot = o.total;
         if (o.vatRate === 21 || !o.vatRate) {
-          return {
-            ...o,
-            vatRate: 26.2,
-            total: Number((o.subtotal * 1.262).toFixed(2)),
-          };
+          vat = 26.2;
+          tot = Number((o.subtotal * 1.262).toFixed(2));
         }
-        return o;
+
+        const normalizedItems = (o.items || []).map(item => {
+          const hasRecQty = item.receivedQuantity !== undefined;
+          const hasIsRec = item.isReceived !== undefined;
+          if (!hasRecQty && !hasIsRec) {
+            const isFull = o.status === 'recibido';
+            return {
+              ...item,
+              isReceived: isFull,
+              receivedQuantity: isFull ? item.quantity : 0,
+            };
+          }
+          return {
+            ...item,
+            isReceived: item.isReceived ?? ((item.receivedQuantity ?? 0) >= item.quantity),
+            receivedQuantity: item.receivedQuantity ?? (item.isReceived ? item.quantity : 0),
+          };
+        });
+
+        return {
+          ...o,
+          vatRate: vat,
+          total: tot,
+          items: normalizedItems,
+        };
       });
     } catch {
       return INITIAL_ORDERS;
@@ -514,6 +539,73 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders(prev => prev.filter(o => o.id !== id));
   };
 
+  const updateOrder = (id: string, updated: Partial<PurchaseOrder>) => {
+    setOrders(prev => prev.map(o => o.id === id ? { ...o, ...updated } : o));
+  };
+
+  const updateOrderItemDelivery = (
+    orderId: string,
+    itemId: string,
+    isReceived: boolean,
+    receivedQuantity?: number
+  ) => {
+    setOrders(prev => prev.map(order => {
+      if (order.id !== orderId) return order;
+
+      const updatedItems = order.items.map(item => {
+        if (item.id !== itemId) return item;
+        const finalReceivedQty = receivedQuantity !== undefined
+          ? Math.max(0, Math.min(item.quantity, receivedQuantity))
+          : (isReceived ? item.quantity : 0);
+        const finalIsReceived = isReceived !== undefined
+          ? isReceived
+          : finalReceivedQty >= item.quantity;
+        return {
+          ...item,
+          isReceived: finalIsReceived,
+          receivedQuantity: finalReceivedQty,
+        };
+      });
+
+      // Compute total ordered vs total received
+      const totalOrdered = updatedItems.reduce((sum, i) => sum + i.quantity, 0);
+      const totalReceived = updatedItems.reduce((sum, i) => sum + (i.receivedQuantity ?? (i.isReceived ? i.quantity : 0)), 0);
+
+      let newStatus: PurchaseOrder['status'] = order.status;
+      if (totalReceived >= totalOrdered) {
+        newStatus = 'recibido';
+      } else if (totalReceived > 0) {
+        newStatus = 'parcial';
+      } else {
+        newStatus = order.status === 'recibido' ? 'en_transito' : order.status;
+      }
+
+      return {
+        ...order,
+        status: newStatus,
+        items: updatedItems,
+      };
+    }));
+  };
+
+  const markAllOrderItemsReceived = (orderId: string, received: boolean) => {
+    setOrders(prev => prev.map(order => {
+      if (order.id !== orderId) return order;
+
+      const updatedItems = order.items.map(item => ({
+        ...item,
+        isReceived: received,
+        receivedQuantity: received ? item.quantity : 0,
+      }));
+
+      return {
+        ...order,
+        status: received ? 'recibido' : 'en_transito',
+        items: updatedItems,
+      };
+    }));
+  };
+
   const addProduct = (productData: Omit<Product, 'id'>): Product => {
     const newProduct: Product = {
       ...productData,
@@ -721,7 +813,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         loadFromDesktopFolder,
         toggleAutoSaveToFolder,
         addOrder,
+        updateOrder,
         deleteOrder,
+        updateOrderItemDelivery,
+        markAllOrderItemsReceived,
         importSingleOrderJson,
         addProduct,
         updateProduct,

@@ -195,6 +195,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       const prod = products.find(p => p.id === line.productId)!;
       const prevPriceRecord = getLatestPriceByMfg(selectedMfgId, line.productId, line.bedSize);
 
+      const isDelivered = status === 'recibido';
+
       return {
         id: `item-${Date.now()}-${Math.random()}`,
         productId: line.productId,
@@ -203,6 +205,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         category: prod.category,
         bedSize: line.bedSize,
         quantity: Number(line.quantity),
+        receivedQuantity: isDelivered ? Number(line.quantity) : 0,
+        isReceived: isDelivered,
         unitCost: Number(line.unitCost),
         previousUnitCost: prevPriceRecord?.unitCost,
         recommendedPvp: Number((line.unitCost * 1.262 * 1.7).toFixed(2)),
@@ -323,7 +327,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                 onChange={e => setStatus(e.target.value as any)}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
               >
-                <option value="recibido">Mercancía Recibida (Stock sumado)</option>
+                <option value="recibido">Mercancía Recibida Completa</option>
+                <option value="parcial">Entrega Parcial / Falta mercancía</option>
                 <option value="en_transito">En tránsito / Esperando envío</option>
                 <option value="pendiente_albaran">Pendiente de albarán final</option>
               </select>

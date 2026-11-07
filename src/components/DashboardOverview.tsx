@@ -107,8 +107,16 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     });
   });
 
-  // Count pending / in transit orders
+  // Count pending / in transit orders and missing units
   const pendingOrdersCount = orders.filter(o => o.status !== 'recibido').length;
+  const totalMissingUnits = orders.reduce((sum, o) => {
+    return sum + o.items.reduce((itemSum, item) => {
+      const rec = item.receivedQuantity !== undefined
+        ? item.receivedQuantity
+        : (item.isReceived ? item.quantity : 0);
+      return itemSum + Math.max(0, item.quantity - rec);
+    }, 0);
+  }, 0);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-150">
@@ -209,13 +217,23 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </span>
             <span className="text-xs text-slate-500 dark:text-slate-400">pedidos en total</span>
           </div>
-          <button
-            onClick={() => setActiveTab('pedidos')}
-            className="mt-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1"
-          >
-            {pendingOrdersCount > 0 ? `${pendingOrdersCount} pendiente(s) de entrega` : 'Ver historial completo'}
-            <ArrowRight className="w-3 h-3" />
-          </button>
+          {totalMissingUnits > 0 ? (
+            <button
+              onClick={() => setActiveTab('faltas')}
+              className="mt-1 text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 font-semibold hover:underline flex items-center gap-1"
+            >
+              ⚠️ Ver {totalMissingUnits} prendas que faltan
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          ) : (
+            <button
+              onClick={() => setActiveTab('pedidos')}
+              className="mt-1 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              Ver historial de pedidos
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
 

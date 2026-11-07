@@ -52,6 +52,8 @@ export interface PurchaseOrderItem {
   previousUnitCost?: number; // Último coste previo registrado
   recommendedPvp?: number;
   notes?: string;
+  isReceived?: boolean; // Ha venido / Entregado
+  receivedQuantity?: number; // Cantidad recibida (si es parcial, p.ej. 6 de 10)
 }
 
 export interface PurchaseOrder {
@@ -61,7 +63,7 @@ export interface PurchaseOrder {
   weekNumber: number;
   year: number;
   manufacturerId: string;
-  status: 'recibido' | 'en_transito' | 'pendiente_albaran';
+  status: 'recibido' | 'parcial' | 'en_transito' | 'pendiente_albaran';
   items: PurchaseOrderItem[];
   discountPercentage?: number;
   vatRate: number; // 26.2% = IVA 21% + Recargo de Equivalencia 5.2% (Comunidad de Bienes)
@@ -87,4 +89,4 @@ export interface PriceRecord {
   date: string;
 }
 
-export type ActiveTab = 'resumen' | 'nuevo_pedido' | 'pedidos' | 'comparador' | 'proveedores';
+export type ActiveTab = 'resumen' | 'nuevo_pedido' | 'pedidos' | 'faltas' | 'comparador' | 'proveedores';

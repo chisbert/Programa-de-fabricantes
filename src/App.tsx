@@ -3,6 +3,7 @@ import { StoreProvider, useStore } from './context/StoreContext';
 import { Header } from './components/Header';
 import { DashboardOverview } from './components/DashboardOverview';
 import { OrderHistoryView } from './components/OrderHistoryView';
+import { PendingItemsView } from './components/PendingItemsView';
 import { PriceComparatorView } from './components/PriceComparatorView';
 import { ManufacturerDirectoryView } from './components/ManufacturerDirectoryView';
 import { NewOrderModal } from './components/NewOrderModal';
@@ -113,6 +114,13 @@ const AppContent: React.FC = () => {
           <OrderHistoryView
             onOpenNewOrder={() => setIsNewOrderOpen(true)}
             selectedOrderId={selectedOrderId}
+          />
+        )}
+
+        {activeTab === 'faltas' && (
+          <PendingItemsView
+            onSelectOrderDetails={handleSelectOrderDetails}
+            onOpenNewOrder={() => setIsNewOrderOpen(true)}
           />
         )}
 
