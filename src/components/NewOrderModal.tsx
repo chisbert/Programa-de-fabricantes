@@ -32,12 +32,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
   const [selectedMfgId, setSelectedMfgId] = useState<string>(manufacturers[0]?.id || '');
   const [orderDate, setOrderDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [orderNumber, setOrderNumber] = useState<string>(() => {
-    const today = new Date();
-    const week = getWeekNumber(today);
-    return `ALB-${today.getFullYear()}-W${week}-${Math.floor(100 + Math.random() * 900)}`;
-  });
-  const [status, setStatus] = useState<'recibido' | 'en_transito' | 'pendiente_albaran'>('recibido');
+  const [status, setStatus] = useState<'recibido' | 'parcial' | 'en_transito' | 'pendiente_albaran'>('recibido');
   const [notes, setNotes] = useState<string>('');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
 
@@ -180,11 +175,6 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       return;
     }
 
-    if (!orderNumber.trim()) {
-      setErrorMsg('Introduce un número de albarán o referencia de pedido.');
-      return;
-    }
-
     const validLines = items.filter(i => i.productId && i.quantity > 0 && i.unitCost > 0);
     if (validLines.length === 0) {
       setErrorMsg('Debes añadir al menos una línea con producto, cantidad y precio de coste válido.');
@@ -216,9 +206,10 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
     const parsedDate = new Date(orderDate);
     const week = getWeekNumber(parsedDate);
+    const autoOrderNumber = `PED-${parsedDate.getFullYear()}-S${week}-${Math.floor(100 + Math.random() * 900)}`;
 
     const createdOrder = addOrder({
-      orderNumber: orderNumber.trim(),
+      orderNumber: autoOrderNumber,
       orderDate,
       weekNumber: week,
       year: parsedDate.getFullYear(),
@@ -270,7 +261,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
           )}
 
           {/* Section 1: Order Metadata */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-800/40 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                 Fabricante / Proveedor *
@@ -291,19 +282,6 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   Condición: {selectedMfg.paymentTerms}
                 </p>
               )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Nº Albarán o Factura *
-              </label>
-              <input
-                type="text"
-                value={orderNumber}
-                onChange={e => setOrderNumber(e.target.value)}
-                placeholder="Ej. ALB-2026-4402"
-                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white font-mono"
-              />
             </div>
 
             <div>

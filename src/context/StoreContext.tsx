@@ -753,13 +753,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       // Check if it's a single order object
-      if (parsed.orderNumber && Array.isArray(parsed.items) && parsed.items.length > 0) {
+      if (Array.isArray(parsed.items) && parsed.items.length > 0) {
         const mfgId = parsed.manufacturerId || manufacturers[0]?.id;
         const today = new Date();
+        const weekNum = parsed.weekNumber || Math.ceil((((today.getTime() - new Date(today.getFullYear(), 0, 1).getTime()) / 86400000) + 1) / 7);
         const newOrder = addOrder({
-          orderNumber: parsed.orderNumber,
+          orderNumber: parsed.orderNumber || `PED-${today.getFullYear()}-S${weekNum}-${Math.floor(100 + Math.random() * 900)}`,
           orderDate: parsed.orderDate || today.toISOString().split('T')[0],
-          weekNumber: parsed.weekNumber || Math.ceil((((today.getTime() - new Date(today.getFullYear(), 0, 1).getTime()) / 86400000) + 1) / 7),
+          weekNumber: weekNum,
           year: parsed.year || today.getFullYear(),
           manufacturerId: mfgId,
           status: parsed.status || 'recibido',
