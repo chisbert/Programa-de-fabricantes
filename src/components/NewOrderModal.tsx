@@ -248,7 +248,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         isFabricPiece: Boolean(line.isFabricPiece),
         unitCost: Number(line.unitCost),
         previousUnitCost: prevPriceRecord?.unitCost,
-        recommendedPvp: Number((line.unitCost * 1.262 * 1.7).toFixed(2)),
+        recommendedPvp: Number((line.unitCost * 2.3).toFixed(2)),
         notes: line.notes,
       };
     });

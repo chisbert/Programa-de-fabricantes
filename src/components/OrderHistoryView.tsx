@@ -417,6 +417,7 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                             <th className="py-2.5 px-3 font-semibold text-center w-28">Medida</th>
                             <th className="py-2.5 px-3 font-semibold text-right w-24">Cantidad</th>
                             <th className="py-2.5 px-3 font-semibold text-right w-28">Precio Coste (€)</th>
+                            <th className="py-2.5 px-3 font-semibold text-right w-32 text-emerald-700 dark:text-emerald-400">PVP Venta (+130%)</th>
                             <th className="py-2.5 px-3 font-semibold text-right w-28">Total Línea</th>
                             <th className="py-2.5 px-3 font-semibold text-center w-32">Variación</th>
                             <th className="py-2.5 px-3 font-semibold text-center w-52">¿Ha venido? (Revisión)</th>
@@ -475,6 +476,10 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
                                   {item.unitCost.toFixed(2)} €
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400 tabular-nums bg-emerald-50/30 dark:bg-emerald-950/15">
+                                  <div>{(item.unitCost * 2.3).toFixed(2)} €</div>
+                                  <div className="text-[10px] font-sans font-normal text-slate-400">×2,30 s/ud.</div>
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums">
                                   {isVariablePiece ? (

@@ -26,8 +26,8 @@ export const PriceComparatorView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
-  // Target markup multiplier (e.g. 2.10 means PVP = unitCost * 2.10)
-  const [markupMultiplier, setMarkupMultiplier] = useState<number>(2.10);
+  // Target markup multiplier (2.30 means +130% over net unit cost)
+  const [markupMultiplier, setMarkupMultiplier] = useState<number>(2.30);
 
   // Compile every unique combination of (Product + BedSize) that has purchase records or catalog presence
   const comparisonRows = useMemo(() => {
@@ -190,10 +190,11 @@ export const PriceComparatorView: React.FC = () => {
               className="font-mono font-bold bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white rounded px-2 py-1 text-xs border-0 focus:ring-1 focus:ring-blue-500"
             >
               <option value="1.80">x1.80 (+80%)</option>
-              <option value="2.00">x2.00 (Doble / 50% margen)</option>
-              <option value="2.10">x2.10 (Recomendado textil)</option>
+              <option value="2.00">x2.00 (Doble / +100%)</option>
+              <option value="2.10">x2.10 (+110%)</option>
               <option value="2.25">x2.25 (+125%)</option>
-              <option value="2.50">x2.50 (Alta gama)</option>
+              <option value="2.30">x2.30 (+130% Recomendado)</option>
+              <option value="2.50">x2.50 (+150% Alta gama)</option>
             </select>
           </div>
         </div>

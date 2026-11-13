@@ -436,6 +436,9 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
                     <th className="py-2.5 px-2.5 font-semibold w-28">Medida</th>
                     <th className="py-2.5 px-2.5 font-semibold text-right w-28">Cantidad</th>
                     <th className="py-2.5 px-2.5 font-semibold text-right w-28">Coste (€)</th>
+                    <th className="py-2.5 px-2.5 font-semibold text-right w-32 text-emerald-700 dark:text-emerald-400">
+                      PVP Venta (+130%)
+                    </th>
                     <th className="py-2.5 px-3 font-semibold text-right w-28">Total Línea</th>
                     <th className="py-2.5 px-2 font-semibold text-center w-10"></th>
                   </tr>
@@ -443,7 +446,7 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900">
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-6 text-center text-slate-400 text-xs">
+                      <td colSpan={8} className="py-6 text-center text-slate-400 text-xs">
                         No hay líneas en la tabla. Usa los botones de arriba para añadir prendas o piezas de tela.
                       </td>
                     </tr>
@@ -525,6 +528,9 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
                               }
                               className="w-full px-2 py-1.5 text-xs text-right font-mono font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
                             />
+                          </td>
+                          <td className="p-2 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400 tabular-nums bg-emerald-50/40 dark:bg-emerald-950/20">
+                            {(Math.max(0, Number(item.unitCost) || 0) * 2.3).toFixed(2)} €
                           </td>
                           <td className="p-2 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums">
                             {isVarPiece ? (

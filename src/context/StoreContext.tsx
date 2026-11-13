@@ -221,6 +221,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       'Uds. Faltan',
       'Coste Unitario Neto (€)',
       'Coste Real c/ R.E. 26,2% (€)',
+      'PVP Venta +130% (€)',
       'Descuento (%)',
       'Portes (€)',
       'Subtotal Neto (€)',
@@ -258,6 +259,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const lineNet = item.quantity * item.unitCost * discountMultiplier;
         const lineWithRE = lineNet * 1.262;
         const unitWithRE = item.unitCost * 1.262;
+        const pvp130 = item.unitCost * 2.3;
         const qtyLabel = isVariablePiece
           ? 'Pieza (m. variables)'
           : item.isFabricPiece
@@ -285,6 +287,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           `"${missLabel}"`,
           `"${item.unitCost.toFixed(2).replace('.', ',')}"`,
           `"${unitWithRE.toFixed(2).replace('.', ',')}"`,
+          `"${pvp130.toFixed(2).replace('.', ',')}"`,
           `"${discount.toString().replace('.', ',')}"`,
           `"${(itemIdx === 0 ? shippingCost : 0).toFixed(2).replace('.', ',')}"`,
           `"${lineNet.toFixed(2).replace('.', ',')}"`,
@@ -919,7 +922,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               isFabricPiece,
               unitCost: cost,
               previousUnitCost: prevPrice?.unitCost,
-              recommendedPvp: Number((cost * 1.262 * 1.7).toFixed(2)),
+              recommendedPvp: Number((cost * 2.3).toFixed(2)),
             });
           });
 
@@ -1031,7 +1034,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           isFabricPiece: Boolean(row.isFabricPiece),
           unitCost: row.unitCost,
           previousUnitCost: prevPrice?.unitCost,
-          recommendedPvp: Number((row.unitCost * 1.262 * 1.7).toFixed(2)),
+          recommendedPvp: Number((row.unitCost * 2.3).toFixed(2)),
         };
       });
 
@@ -1143,7 +1146,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isFabricPiece: Boolean(row.isFabricPiece),
         unitCost: Number(row.unitCost),
         previousUnitCost: prevPrice?.unitCost,
-        recommendedPvp: Number((row.unitCost * 1.262 * 1.7).toFixed(2)),
+        recommendedPvp: Number((row.unitCost * 2.3).toFixed(2)),
       };
     });
 
