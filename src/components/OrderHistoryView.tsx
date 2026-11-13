@@ -13,8 +13,6 @@ import {
   ChevronDown, 
   ChevronUp, 
   FileText, 
-  TrendingUp, 
-  TrendingDown, 
   CheckCircle2, 
   AlertCircle,
   AlertTriangle,
@@ -419,20 +417,12 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                             <th className="py-2.5 px-3 font-semibold text-right w-28">Precio Coste (€)</th>
                             <th className="py-2.5 px-3 font-semibold text-right w-32 text-emerald-700 dark:text-emerald-400">PVP Venta (+130%)</th>
                             <th className="py-2.5 px-3 font-semibold text-right w-28">Total Línea</th>
-                            <th className="py-2.5 px-3 font-semibold text-center w-32">Variación</th>
                             <th className="py-2.5 px-3 font-semibold text-center w-52">¿Ha venido? (Revisión)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-slate-900">
                           {order.items.map((item, idx) => {
                             const lineTotal = item.quantity * item.unitCost;
-                            const prev = item.previousUnitCost;
-                            let delta: { diff: number; pct: number } | null = null;
-                            if (prev && item.unitCost) {
-                              const diff = item.unitCost - prev;
-                              const pct = (diff / prev) * 100;
-                              delta = { diff, pct };
-                            }
 
                             const isVariablePiece = Boolean(item.isFabricPiece && item.quantity === 0);
                             const itemReceivedQty = item.receivedQuantity !== undefined
@@ -488,23 +478,6 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                     </span>
                                   ) : (
                                     `${lineTotal.toFixed(2)} €`
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 text-center">
-                                  {delta ? (
-                                    delta.diff > 0.05 ? (
-                                      <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded tabular-nums">
-                                        ▲ +{delta.diff.toFixed(2)}€ (+{delta.pct.toFixed(1)}%)
-                                      </span>
-                                    ) : delta.diff < -0.05 ? (
-                                      <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded tabular-nums">
-                                        ▼ {delta.diff.toFixed(2)}€ ({delta.pct.toFixed(1)}%)
-                                      </span>
-                                    ) : (
-                                      <span className="text-[11px] text-slate-400">= Mismo precio</span>
-                                    )
-                                  ) : (
-                                    <span className="text-[11px] text-slate-400">1ª Compra</span>
                                   )}
                                 </td>
 
