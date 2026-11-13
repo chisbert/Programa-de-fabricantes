@@ -145,6 +145,7 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
         id: `item-${Date.now()}-${Math.random()}`,
       })),
       discountPercentage: order.discountPercentage,
+      shippingCost: order.shippingCost || 0,
       vatRate: 26.2,
       subtotal: order.subtotal,
       total: Number((order.subtotal * 1.262).toFixed(2)),
@@ -331,6 +332,11 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                             Pendiente ({totalUnits} uds)
                           </span>
                         )}
+                        {(order.shippingCost || 0) > 0 && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded text-[11px] tabular-nums">
+                            Portes: {order.shippingCost!.toFixed(2)} €
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -341,7 +347,9 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                         {order.total.toFixed(2)} €
                       </div>
                       <div className="text-[11px] text-slate-400 tabular-nums">
-                        Base: {order.subtotal.toFixed(2)}€ + {order.vatRate || 26.2}% (IVA 21% + R.E. 5,2%)
+                        Base: {order.subtotal.toFixed(2)}€
+                        {(order.shippingCost || 0) > 0 ? ` (incl. ${order.shippingCost!.toFixed(2)}€ portes)` : ''}
+                        {' '}· +{order.vatRate || 26.2}% (IVA + R.E.)
                       </div>
                     </div>
 
@@ -558,9 +566,14 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
 
                     {/* Order Footer & Actions */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                        {(order.shippingCost || 0) > 0 && (
+                          <p className="text-indigo-700 dark:text-indigo-300 font-medium tabular-nums">
+                            <strong>Portes del albarán:</strong> {order.shippingCost!.toFixed(2)} € sin IVA ({(order.shippingCost! * 1.262).toFixed(2)} € c/ R.E. 26,2%)
+                          </p>
+                        )}
                         {order.notes && <p><strong>Observaciones:</strong> {order.notes}</p>}
-                        {mfg && <p className="mt-0.5">Condiciones: {mfg.paymentTerms} · Tel: {mfg.phone}</p>}
+                        {mfg && <p>Condiciones: {mfg.paymentTerms} · Tel: {mfg.phone}</p>}
                       </div>
 
                       <div className="flex items-center gap-2">

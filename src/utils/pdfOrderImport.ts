@@ -31,6 +31,7 @@ export interface ParsedPdfAlbaranResult {
   orderDate: string;
   matchedManufacturerId: string | null;
   suggestedManufacturerName: string;
+  shippingCost?: number;
   items: ParsedPdfLineItem[];
   rawText: string;
   error?: string;
@@ -234,9 +235,63 @@ function isFooterRow(normText: string): boolean {
   );
 }
 
+function isShippingKeyword(normText: string): boolean {
+  return (
+    normText === 'portes' ||
+    normText === 'porte' ||
+    normText.startsWith('portes ') ||
+    normText.includes('gastos de envio') ||
+    normText.includes('gastos envio') ||
+    normText === 'transporte' ||
+    normText.startsWith('transporte ') ||
+    normText === 'envio'
+  );
+}
+
+function extractShippingCostFromRows(rows: PdfVisualRow[]): number {
+  let totalPortes = 0;
+
+  for (const row of rows) {
+    const norm = normalizeText(row.text);
+    if (
+      !norm.includes('portes') &&
+      !norm.includes('gastos de envio') &&
+      !norm.includes('gastos envio') &&
+      !norm.includes('transporte')
+    ) {
+      continue;
+    }
+    if (norm.includes('portes pagados') || norm.includes('sin cargo') || norm.includes('gratuito')) {
+      continue;
+    }
+
+    // Look for a labelled pattern like "Portes: 12,50" or numeric tokens on the row
+    const cells = groupRowIntoCells(row.tokens);
+    const numericValues = cells
+      .filter(c => isNumericToken(c.text))
+      .map(c => parseCost(c.text))
+      .filter(v => !isNaN(v) && v > 0 && v < 1000);
+
+    if (numericValues.length > 0) {
+      totalPortes += numericValues[numericValues.length - 1];
+    } else {
+      const m = row.text.match(/(?:portes|env[ií]o|transporte)\s*[:.]?\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*€?/i);
+      if (m) {
+        const val = parseCost(m[1]);
+        if (!isNaN(val) && val > 0) {
+          totalPortes += val;
+        }
+      }
+    }
+  }
+
+  return Number(totalPortes.toFixed(2));
+}
+
 function isNoiseRow(normText: string): boolean {
   return (
     isFooterRow(normText) ||
+    isShippingKeyword(normText) ||
     normText.includes('cif ') ||
     normText.includes('nif ') ||
     normText.includes('iban') ||
@@ -587,6 +642,7 @@ export async function parsePdfAlbaranFile(
 
     const orderDate = extractDateFromRows(allRows);
     const mfgInfo = detectManufacturerFromPdf(file.name, allRows, manufacturers);
+    const shippingCost = extractShippingCostFromRows(allRows);
 
     let items = parseTableByHeaderCoordinates(allRows);
     if (items.length === 0) {
@@ -607,6 +663,7 @@ export async function parsePdfAlbaranFile(
           orderDate: ocrResult.orderDate || orderDate,
           matchedManufacturerId: ocrResult.matchedManufacturerId || mfgInfo.matchedManufacturerId,
           suggestedManufacturerName: ocrResult.suggestedManufacturerName || mfgInfo.suggestedManufacturerName,
+          shippingCost: ocrResult.shippingCost || shippingCost,
           rawText: ocrResult.rawText || rawText,
         };
       }
@@ -620,6 +677,7 @@ export async function parsePdfAlbaranFile(
         orderDate,
         matchedManufacturerId: mfgInfo.matchedManufacturerId,
         suggestedManufacturerName: mfgInfo.suggestedManufacturerName,
+        shippingCost,
         items: [],
         rawText: ocrResult.rawText || rawText,
       };
@@ -633,6 +691,7 @@ export async function parsePdfAlbaranFile(
       orderDate,
       matchedManufacturerId: mfgInfo.matchedManufacturerId,
       suggestedManufacturerName: mfgInfo.suggestedManufacturerName,
+      shippingCost,
       items,
       rawText,
     };
@@ -789,6 +848,8 @@ async function runHandwritingOcrOnImages(
     const parsedDate = payload.orderDate ? parseCsvDate(String(payload.orderDate)) || String(payload.orderDate) : todayIso;
     const validDate = /^\d{4}-\d{2}-\d{2}$/.test(parsedDate) ? parsedDate : todayIso;
     const mfgMatch = matchManufacturerName(String(payload.manufacturerName || ''), fileName, manufacturers);
+    const rawShipping = Number(payload.shippingCost);
+    const shippingCost = isNaN(rawShipping) || rawShipping < 0 ? 0 : Number(rawShipping.toFixed(2));
 
     const rawItems = Array.isArray(payload.items) ? payload.items : [];
     const items: ParsedPdfLineItem[] = rawItems
@@ -823,6 +884,7 @@ async function runHandwritingOcrOnImages(
       orderDate: validDate,
       matchedManufacturerId: mfgMatch.matchedManufacturerId,
       suggestedManufacturerName: mfgMatch.suggestedManufacturerName,
+      shippingCost,
       items,
       rawText: String(payload.rawText || ''),
     };

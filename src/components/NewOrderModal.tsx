@@ -35,6 +35,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   const [status, setStatus] = useState<'recibido' | 'parcial' | 'en_transito' | 'pendiente_albaran'>('recibido');
   const [notes, setNotes] = useState<string>('');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [shippingCost, setShippingCost] = useState<number>(0);
 
   // New quick-product inline modal state
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
@@ -202,7 +203,9 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   const fabricPieceCount = items.filter(i => i.isFabricPiece).length;
   const rawSubtotal = items.reduce((acc, curr) => acc + ((Number(curr.quantity) || 0) * (Number(curr.unitCost) || 0)), 0);
   const discountAmount = rawSubtotal * (discountPercent / 100);
-  const subtotal = Math.max(0, rawSubtotal - discountAmount);
+  const netItemsSubtotal = Math.max(0, rawSubtotal - discountAmount);
+  const cleanShipping = Math.max(0, Number(shippingCost) || 0);
+  const subtotal = netItemsSubtotal + cleanShipping;
   const vatAmount = subtotal * 0.21;
   const reAmount = subtotal * 0.052;
   const totalTaxAmount = subtotal * 0.262; // 26.2%
@@ -263,6 +266,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       status,
       items: orderItems,
       discountPercentage: discountPercent,
+      shippingCost: cleanShipping,
       vatRate: 26.2,
       subtotal: Number(subtotal.toFixed(2)),
       total: Number(totalWithVat.toFixed(2)),
@@ -272,6 +276,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
     if (onOrderCreated) {
       onOrderCreated(createdOrder.id);
     }
+    setShippingCost(0);
     onClose();
   };
 
@@ -728,8 +733,32 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                 </span>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>Base Imponible Neta:</span>
+                <span>Importe Artículos:</span>
                 <span className="font-mono text-slate-900 dark:text-white tabular-nums">
+                  {netItemsSubtotal.toFixed(2)} €
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 gap-2">
+                <label htmlFor="new-order-portes" className="font-medium text-indigo-700 dark:text-indigo-300">
+                  Portes / Gastos de envío (€ sin IVA):
+                </label>
+                <div className="relative w-28">
+                  <input
+                    id="new-order-portes"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={shippingCost > 0 ? shippingCost : ''}
+                    onChange={e => setShippingCost(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="0.00"
+                    className="w-full text-right pr-6 pl-2 py-1 text-xs font-mono font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white tabular-nums"
+                  />
+                  <span className="absolute right-2 top-1 text-[11px] text-slate-400">€</span>
+                </div>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400 pt-1 border-t border-slate-200/70 dark:border-slate-700/70">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">Base Imponible Neta:</span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
                   {subtotal.toFixed(2)} €
                 </span>
               </div>

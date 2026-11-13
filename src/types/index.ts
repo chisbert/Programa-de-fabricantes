@@ -69,6 +69,7 @@ export interface PurchaseOrder {
   discountPercentage?: number;
   vatRate: number; // 26.2% = IVA 21% + Recargo de Equivalencia 5.2% (Comunidad de Bienes)
   reRate?: number; // 5.2%
+  shippingCost?: number; // Portes / gastos de envío netos sin IVA (€)
   subtotal: number;
   total: number;
   paymentMethod?: string;

@@ -71,6 +71,7 @@ interface StoreContextType {
     orderDate: string;
     manufacturerId?: string | null;
     newManufacturerName?: string;
+    shippingCost?: number;
     items: Array<{ productName: string; bedSize: BedSize; quantity: number; unitCost: number; isFabricPiece?: boolean }>;
   }) => { success: boolean; message: string; order?: PurchaseOrder };
   addProduct: (productData: Omit<Product, 'id'>) => Product;
@@ -221,6 +222,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       'Coste Unitario Neto (€)',
       'Coste Real c/ R.E. 26,2% (€)',
       'Descuento (%)',
+      'Portes (€)',
       'Subtotal Neto (€)',
       'Total con R.E. 26,2% (€)',
       'Notas / Observaciones',
@@ -239,10 +241,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const mfg = manufacturers.find(m => m.id === order.manufacturerId)?.name || 'Desconocido';
       const discount = order.discountPercentage || 0;
       const discountMultiplier = 1 - discount / 100;
+      const shippingCost = order.shippingCost || 0;
       const orderStatusLabel = statusLabels[order.status] || order.status;
       const safeNotes = (order.notes || '').replace(/"/g, '""');
 
-      order.items.forEach(item => {
+      order.items.forEach((item, itemIdx) => {
         const isVariablePiece = Boolean(item.isFabricPiece && item.quantity === 0);
         const receivedQty = item.receivedQuantity !== undefined
           ? item.receivedQuantity
@@ -283,6 +286,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           `"${item.unitCost.toFixed(2).replace('.', ',')}"`,
           `"${unitWithRE.toFixed(2).replace('.', ',')}"`,
           `"${discount.toString().replace('.', ',')}"`,
+          `"${(itemIdx === 0 ? shippingCost : 0).toFixed(2).replace('.', ',')}"`,
           `"${lineNet.toFixed(2).replace('.', ',')}"`,
           `"${lineWithRE.toFixed(2).replace('.', ',')}"`,
           `"${safeNotes}"`,
@@ -923,7 +927,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return { success: false, message: 'No se encontraron artículos válidos en el archivo.' };
           }
 
-          const subtotal = Number(cleanItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+          const itemsSubtotal = Number(cleanItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+          const shippingCost = Math.max(0, Number(parsed.shippingCost ?? parsed.portes ?? 0) || 0);
+          const subtotal = Number((itemsSubtotal + shippingCost).toFixed(2));
           const total = Number((subtotal * 1.262).toFixed(2));
 
           const newOrder = addOrder({
@@ -935,6 +941,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             status: 'recibido',
             items: cleanItems,
             discountPercentage: 0,
+            shippingCost,
             vatRate: 26.2,
             subtotal,
             total,
@@ -979,6 +986,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const localProdCache = new Map<string, Product>();
     const createdOrders: PurchaseOrder[] = [];
+    const csvShippingCost = Math.max(0, Number(csvResult.shippingCost) || 0);
+    let shippingApplied = false;
 
     rowsByDate.forEach((dateRows, orderDate) => {
       const parsedDateObj = new Date(orderDate);
@@ -1026,7 +1035,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
       });
 
-      const subtotal = Number(orderItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+      const orderShipping = !shippingApplied ? csvShippingCost : 0;
+      shippingApplied = true;
+      const itemsSubtotal = Number(orderItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+      const subtotal = Number((itemsSubtotal + orderShipping).toFixed(2));
       const total = Number((subtotal * 1.262).toFixed(2));
 
       const created = addOrder({
@@ -1038,6 +1050,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         status: 'recibido',
         items: orderItems,
         discountPercentage: 0,
+        shippingCost: orderShipping,
         vatRate: 26.2,
         subtotal,
         total,
@@ -1050,10 +1063,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const orderLabel = createdOrders.length === 1
       ? `albarán del ${createdOrders[0].orderDate}`
       : `${createdOrders.length} albaranes`;
+    const portesNote = csvShippingCost > 0 ? ` + ${csvShippingCost.toFixed(2)} € de portes` : '';
 
     return {
       success: true,
-      message: `Importado ${orderLabel} de "${targetMfg.name}" con ${totalLines} artículo(s) (fecha, artículo, medida, cantidad y coste).`,
+      message: `Importado ${orderLabel} de "${targetMfg.name}" con ${totalLines} artículo(s)${portesNote}.`,
       order: createdOrders[0],
     };
   };
@@ -1062,6 +1076,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     orderDate: string;
     manufacturerId?: string | null;
     newManufacturerName?: string;
+    shippingCost?: number;
     items: Array<{ productName: string; bedSize: BedSize; quantity: number; unitCost: number; isFabricPiece?: boolean }>;
   }): { success: boolean; message: string; order?: PurchaseOrder } => {
     const validItems = data.items.filter(
@@ -1132,7 +1147,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
     });
 
-    const subtotal = Number(orderItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+    const shippingCost = Math.max(0, Number(data.shippingCost) || 0);
+    const itemsSubtotal = Number(orderItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+    const subtotal = Number((itemsSubtotal + shippingCost).toFixed(2));
     const total = Number((subtotal * 1.262).toFixed(2));
 
     const created = addOrder({
@@ -1144,14 +1161,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       status: 'recibido',
       items: orderItems,
       discountPercentage: 0,
+      shippingCost,
       vatRate: 26.2,
       subtotal,
       total,
     });
 
+    const portesNote = shippingCost > 0 ? ` (+ ${shippingCost.toFixed(2)} € portes)` : '';
+
     return {
       success: true,
-      message: `Albarán de "${targetMfg.name}" (${finalDate}) importado con ${orderItems.length} artículo(s).`,
+      message: `Albarán de "${targetMfg.name}" (${finalDate}) importado con ${orderItems.length} artículo(s)${portesNote}.`,
       order: created,
     };
   };

@@ -29,6 +29,7 @@ interface PdfImportPreviewModalProps {
     orderDate: string;
     manufacturerId?: string | null;
     newManufacturerName?: string;
+    shippingCost?: number;
     items: Array<{
       productName: string;
       bedSize: BedSize;
@@ -53,6 +54,7 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
   const [orderDate, setOrderDate] = useState('');
   const [selectedMfgId, setSelectedMfgId] = useState<string>('__NEW__');
   const [newManufacturerName, setNewManufacturerName] = useState('');
+  const [shippingCost, setShippingCost] = useState<number>(0);
   const [items, setItems] = useState<ParsedPdfLineItem[]>([]);
   const [rawText, setRawText] = useState('');
   const [usedOcr, setUsedOcr] = useState(false);
@@ -72,6 +74,7 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
       setNewManufacturerName(data.suggestedManufacturerName || '');
     }
 
+    setShippingCost(Math.max(0, Number(data.shippingCost) || 0));
     setItems(data.items.length > 0 ? data.items.map(item => ({ ...item })) : []);
     setRawText(data.rawText || '');
     setUsedOcr(Boolean(data.usedOcr));
@@ -146,10 +149,12 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
     setItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const subtotal = items.reduce(
+  const itemsSubtotal = items.reduce(
     (sum, item) => sum + Math.max(0, item.quantity) * Math.max(0, item.unitCost),
     0
   );
+  const cleanShipping = Math.max(0, Number(shippingCost) || 0);
+  const subtotal = itemsSubtotal + cleanShipping;
   const vatAndRe = subtotal * 0.262;
   const totalWithRe = subtotal * 1.262;
   const totalUnits = items.reduce((sum, item) => sum + Math.max(0, item.quantity), 0);
@@ -189,6 +194,7 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
       orderDate: orderDate || new Date().toISOString().split('T')[0],
       manufacturerId: selectedMfgId === '__NEW__' ? null : selectedMfgId,
       newManufacturerName: selectedMfgId === '__NEW__' ? newManufacturerName.trim() : undefined,
+      shippingCost: cleanShipping,
       items: validItems,
     });
   };
@@ -321,8 +327,8 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
             </div>
           )}
 
-          {/* Header fields: Manufacturer & Date */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          {/* Header fields: Manufacturer, Date & Shipping */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                 Fabricante / Proveedor *
@@ -369,7 +375,28 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
                 className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white"
               />
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                En piezas de tela la cantidad no es obligatoria (metros variables), pero sí el resto de datos.
+                En piezas de tela la cantidad no es obligatoria (metros variables).
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Portes / Gastos de envío (€ sin IVA)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={shippingCost > 0 ? shippingCost : ''}
+                  onChange={e => setShippingCost(Math.max(0, parseFloat(e.target.value) || 0))}
+                  placeholder="0.00"
+                  className="w-full pl-3 pr-7 py-2 text-xs font-mono font-semibold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white tabular-nums"
+                />
+                <span className="absolute right-2.5 top-2 text-xs text-slate-400">€</span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Se suma a la base imponible antes del 26,2%.
               </p>
             </div>
           </div>
@@ -538,6 +565,22 @@ export const PdfImportPreviewModal: React.FC<PdfImportPreviewModalProps> = ({
               Régimen C.B.: IVA 21% + R.E. 5,2% (26,2%)
             </div>
             <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-right">
+              {cleanShipping > 0 && (
+                <>
+                  <div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">Base Artículos</div>
+                    <div className="font-mono font-semibold text-sm text-slate-700 dark:text-slate-300 tabular-nums">
+                      {itemsSubtotal.toFixed(2)} €
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">Portes</div>
+                    <div className="font-mono font-semibold text-sm text-indigo-700 dark:text-indigo-300 tabular-nums">
+                      +{cleanShipping.toFixed(2)} €
+                    </div>
+                  </div>
+                </>
+              )}
               <div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400">Base Imponible Neta</div>
                 <div className="font-mono font-bold text-sm text-slate-900 dark:text-white tabular-nums">

@@ -65,8 +65,9 @@ Fabricantes ya conocidos en la tienda: ${mfgListText}
 Necesito que reconozcas la escritura (incluida caligrafía manual, abreviaturas comerciales en español, tachaduras corregidas o anotaciones al margen) y extraigas ÚNICAMENTE estos datos:
 1. orderDate: Fecha del pedido/albarán en formato YYYY-MM-DD (si no aparece, devuelve "").
 2. manufacturerName: Nombre del fabricante/proveedor (si aparece en el encabezado, sello, letra escrita o coincide con el nombre del archivo o la lista de fabricantes conocidos; si no se distingue, devuelve "").
-3. rawText: Transcripción fiel y legible línea por línea de todo lo que está escrito en la hoja para que el usuario pueda comprobarlo.
-4. items: Lista de artículos/prendas/piezas detectadas. Por cada línea extrae:
+3. shippingCost: Importe neto de los PORTES / GASTOS DE ENVÍO / TRANSPORTE en euros sin IVA (número decimal, ej. 12.5). Si pone "portes pagados", "0" o no aparece ningún porte, devuelve 0. ¡IMPORTANTE! No incluyas los portes como un artículo dentro de "items"; pon su importe únicamente en "shippingCost".
+4. rawText: Transcripción fiel y legible línea por línea de todo lo que está escrito en la hoja para que el usuario pueda comprobarlo.
+5. items: Lista de artículos/prendas/piezas detectadas. Por cada línea extrae:
    - productName: Nombre del artículo o tela SIN códigos SKU ni referencias numéricas delante. Incluye ancho o color si es relevante para telas (ej. "Loneta estampada flores 280 cm").
    - bedSize: Medida de cama si corresponde a ropa de cama ("90", "105", "135", "150", "160", "180", "200") o "Especial" (usa "Especial" para piezas de tela, anchos especiales, manteles o medidas no estándar, salvo que indique claramente cama 90/105/135/150/160/180/200).
    - isFabricPiece: true si el artículo es una PIEZA DE TELA / ROLLO / TEJIDO POR METROS (por ejemplo menciona "pieza", "pza", "tela", "tejido", "rollo", "loneta", "popelín", "batista", "visillo", "tergal", "metros variables", o si no trae cantidad fija porque cada pieza trae metros distintos); false si son unidades normales (juegos de sábanas, colchas, almohadas, etc.).
@@ -99,6 +100,10 @@ Necesito que reconozcas la escritura (incluida caligrafía manual, abreviaturas 
               manufacturerName: {
                 type: Type.STRING,
                 description: 'Nombre del fabricante o cadena vacía si no aparece.',
+              },
+              shippingCost: {
+                type: Type.NUMBER,
+                description: 'Importe neto de los portes o gastos de envío en euros (0 si no hay portes).',
               },
               rawText: {
                 type: Type.STRING,

@@ -261,6 +261,7 @@ export function inferCategoryFromName(name: string, categories: CategoryInfo[]):
 export function parseCsvAlbaran(csvContent: string): {
   success: boolean;
   rows: ParsedCsvAlbaranRow[];
+  shippingCost: number;
   error?: string;
 } {
   const cleanContent = csvContent.replace(/^\uFEFF/, '');
@@ -270,7 +271,7 @@ export function parseCsvAlbaran(csvContent: string): {
     .filter(l => l.length > 0);
 
   if (rawLines.length === 0) {
-    return { success: false, rows: [], error: 'El archivo CSV está vacío.' };
+    return { success: false, rows: [], shippingCost: 0, error: 'El archivo CSV está vacío.' };
   }
 
   const delimiter = detectDelimiter(rawLines);
@@ -308,6 +309,7 @@ export function parseCsvAlbaran(csvContent: string): {
     ['precio coste', 'coste unitario neto', 'coste unitario', 'coste ud', 'coste', 'precio unitario', 'precio', 'importe unitario', 'pu'],
     ['total', 'subtotal', 'r e', 're 26', 'iva', 'con r']
   );
+  const portesIdx = findHeaderIndex(['portes', 'gastos de envio', 'gastos envio', 'transporte', 'envio']);
 
   const hasHeader =
     articuloIdx !== -1 ||
@@ -333,6 +335,7 @@ export function parseCsvAlbaran(csvContent: string): {
       return {
         success: false,
         rows: [],
+        shippingCost: 0,
         error: 'No se reconocieron las columnas del CSV. Asegúrate de incluir: Fecha, Artículo, Medida, Cantidad y Coste.',
       };
     }
@@ -341,6 +344,7 @@ export function parseCsvAlbaran(csvContent: string): {
       return {
         success: false,
         rows: [],
+        shippingCost: 0,
         error: 'Faltan columnas obligatorias en el CSV (Artículo, Cantidad o Coste).',
       };
     }
@@ -349,13 +353,40 @@ export function parseCsvAlbaran(csvContent: string): {
   const todayIso = new Date().toISOString().split('T')[0];
   let lastValidDate = todayIso;
   const rows: ParsedCsvAlbaranRow[] = [];
+  let detectedPortesFromCol = 0;
+  let detectedPortesFromRows = 0;
 
   for (let i = startRow; i < parsedLines.length; i++) {
     const cells = parsedLines[i];
     if (cells.every(c => !c.trim())) continue;
 
+    if (portesIdx !== -1 && cells[portesIdx]) {
+      const colPortes = parseCost(cells[portesIdx]);
+      if (!isNaN(colPortes) && colPortes > 0) {
+        detectedPortesFromCol = Math.max(detectedPortesFromCol, colPortes);
+      }
+    }
+
     const productName = (cells[articuloIdx] || '').trim();
     if (!productName) continue;
+
+    // Check if the row itself represents shipping ("Portes", "Gastos de envío", "Transporte")
+    const normProdForPortes = normalizeText(productName);
+    if (
+      normProdForPortes === 'portes' ||
+      normProdForPortes === 'porte' ||
+      normProdForPortes === 'gastos de envio' ||
+      normProdForPortes === 'gastos envio' ||
+      normProdForPortes === 'transporte' ||
+      normProdForPortes === 'envio'
+    ) {
+      const rowCost = parseCost(cells[costeIdx] || '');
+      const rowQty = parseQuantity(cells[cantidadIdx] || '');
+      if (!isNaN(rowCost) && rowCost > 0) {
+        detectedPortesFromRows += rowCost * Math.max(1, rowQty || 1);
+      }
+      continue;
+    }
 
     let rowDate = lastValidDate;
     if (fechaIdx !== -1 && cells[fechaIdx]) {
@@ -407,13 +438,18 @@ export function parseCsvAlbaran(csvContent: string): {
     });
   }
 
+  const shippingCost = Number(
+    (detectedPortesFromRows > 0 ? detectedPortesFromRows : detectedPortesFromCol).toFixed(2)
+  );
+
   if (rows.length === 0) {
     return {
       success: false,
       rows: [],
+      shippingCost,
       error: 'No se encontraron líneas válidas con artículo, cantidad y coste en el archivo CSV.',
     };
   }
 
-  return { success: true, rows };
+  return { success: true, rows, shippingCost };
 }
