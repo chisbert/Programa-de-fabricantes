@@ -59,15 +59,19 @@ export const PendingItemsView: React.FC<PendingItemsViewProps> = ({
       missingQuantity: number;
       unitCost: number;
       missingTotalCost: number;
+      isVariableFabricPiece?: boolean;
     }> = [];
 
     orders.forEach(order => {
       order.items.forEach(item => {
+        const isVariablePiece = Boolean(item.isFabricPiece && item.quantity === 0);
         const receivedQty = item.receivedQuantity !== undefined
           ? item.receivedQuantity
           : (item.isReceived ? item.quantity : 0);
         
-        const missingQty = Math.max(0, item.quantity - receivedQty);
+        const missingQty = isVariablePiece
+          ? (item.isReceived ? 0 : 1)
+          : Math.max(0, item.quantity - receivedQty);
 
         if (missingQty > 0) {
           list.push({
@@ -86,7 +90,8 @@ export const PendingItemsView: React.FC<PendingItemsViewProps> = ({
             receivedQuantity: receivedQty,
             missingQuantity: missingQty,
             unitCost: item.unitCost,
-            missingTotalCost: missingQty * item.unitCost,
+            missingTotalCost: isVariablePiece ? 0 : missingQty * item.unitCost,
+            isVariableFabricPiece: isVariablePiece,
           });
         }
       });
@@ -161,7 +166,11 @@ export const PendingItemsView: React.FC<PendingItemsViewProps> = ({
       }
 
       items.forEach(item => {
-        text += `   • ${item.productName} - Cama ${item.bedSize}: Faltan ${item.missingQuantity} uds (Pedido ${item.orderNumber} del ${item.orderDate})\n`;
+        const sizeLabel = item.bedSize === 'Especial' ? 'Especial' : `Cama ${item.bedSize}`;
+        const qtyLabel = item.isVariableFabricPiece
+          ? 'Falta 1 pieza de tela (metros variables)'
+          : `Faltan ${item.missingQuantity} uds`;
+        text += `   • ${item.productName} - ${sizeLabel}: ${qtyLabel} (Pedido ${item.orderNumber} del ${item.orderDate})\n`;
       });
       text += `\n`;
     });
@@ -192,15 +201,16 @@ export const PendingItemsView: React.FC<PendingItemsViewProps> = ({
 
     const rows = filteredMissingItems.map(item => {
       const mfg = getManufacturerById(item.manufacturerId);
-      const totalNeto = item.missingQuantity * item.unitCost;
+      const totalNeto = item.isVariableFabricPiece ? 0 : item.missingQuantity * item.unitCost;
       const totalRE = totalNeto * 1.262;
+      const sizeLabel = item.bedSize === 'Especial' ? 'Especial' : `Cama ${item.bedSize}`;
 
       return [
         `"${mfg?.name || ''}"`,
         `"${item.productName.replace(/"/g, '""')}"`,
-        `"Cama ${item.bedSize}"`,
-        item.missingQuantity,
-        item.quantity,
+        `"${sizeLabel}"`,
+        item.isVariableFabricPiece ? '"1 pieza (var.)"' : item.missingQuantity,
+        item.isVariableFabricPiece ? '"Pieza (var.)"' : item.quantity,
         item.receivedQuantity,
         `"${item.unitCost.toFixed(2).replace('.', ',')}"`,
         `"${totalNeto.toFixed(2).replace('.', ',')}"`,
@@ -560,22 +570,28 @@ export const PendingItemsView: React.FC<PendingItemsViewProps> = ({
 
                             {/* Delivery progress */}
                             <td className="py-3 px-3 text-center">
-                              <span className="text-slate-600 dark:text-slate-300 font-mono text-xs">
-                                Recibidas: <strong>{item.receivedQuantity}</strong> de {item.quantity}
-                              </span>
+                              {item.isVariableFabricPiece ? (
+                                <span className="text-amber-700 dark:text-amber-400 font-medium text-xs">
+                                  Pieza tela (m. var.)
+                                </span>
+                              ) : (
+                                <span className="text-slate-600 dark:text-slate-300 font-mono text-xs">
+                                  Recibidas: <strong>{item.receivedQuantity}</strong> de {item.quantity}
+                                </span>
+                              )}
                             </td>
 
                             {/* Missing Quantity Badge */}
                             <td className="py-3 px-3 text-center">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold font-mono text-xs bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
                                 <AlertTriangle className="w-3 h-3 text-amber-600" />
-                                {item.missingQuantity} uds
+                                {item.isVariableFabricPiece ? '1 pieza' : `${item.missingQuantity} uds`}
                               </span>
                             </td>
 
                             {/* Pending Cost */}
                             <td className="py-3 px-3 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums">
-                              {item.missingTotalCost.toFixed(2)} €
+                              {item.isVariableFabricPiece ? 'Variable' : `${item.missingTotalCost.toFixed(2)} €`}
                             </td>
 
                             {/* Quick Action: Mark as Arrived */}

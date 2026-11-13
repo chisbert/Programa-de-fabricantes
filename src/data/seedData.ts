@@ -43,6 +43,12 @@ export const TEXTILE_CATEGORIES: CategoryInfo[] = [
     description: 'Plaids de pie de cama, tacto terciopelo y mantas polares',
     typicalSizes: ['135', '150', '180', 'Especial'],
   },
+  {
+    id: 'piezas_tela',
+    label: 'Piezas de Tela',
+    description: 'Piezas, rollos y metraje de tejido con metros variables por pieza',
+    typicalSizes: ['150', 'Especial'],
+  },
 ];
 
 export const INITIAL_BED_SIZES: BedSize[] = ['90', '105', '135', '150', '160', '180', '200'];

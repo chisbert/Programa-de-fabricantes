@@ -111,6 +111,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const pendingOrdersCount = orders.filter(o => o.status !== 'recibido').length;
   const totalMissingUnits = orders.reduce((sum, o) => {
     return sum + o.items.reduce((itemSum, item) => {
+      if (item.isFabricPiece && item.quantity === 0) {
+        return itemSum + (item.isReceived ? 0 : 1);
+      }
       const rec = item.receivedQuantity !== undefined
         ? item.receivedQuantity
         : (item.isReceived ? item.quantity : 0);

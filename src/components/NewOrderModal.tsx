@@ -52,6 +52,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
     bedSize: BedSize;
     quantity: number;
     unitCost: number;
+    isFabricPiece: boolean;
     notes?: string;
   }
 
@@ -62,6 +63,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       bedSize: '150',
       quantity: 10,
       unitCost: 0,
+      isFabricPiece: false,
     },
   ]);
 
@@ -100,6 +102,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         bedSize: '150',
         quantity: 5,
         unitCost: 0,
+        isFabricPiece: false,
       },
     ]);
   };
@@ -113,6 +116,24 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
     setItems(prev => prev.map(item => {
       if (item.id !== id) return item;
       const updated = { ...item, [field]: value };
+
+      if (field === 'productId' && value) {
+        const selectedProd = products.find(p => p.id === value);
+        if (selectedProd?.category === 'piezas_tela') {
+          updated.isFabricPiece = true;
+          updated.bedSize = 'Especial';
+          updated.quantity = 0;
+        }
+      }
+
+      if (field === 'isFabricPiece') {
+        if (value) {
+          updated.quantity = 0;
+          if (updated.bedSize === '150') updated.bedSize = 'Especial';
+        } else if (updated.quantity <= 0) {
+          updated.quantity = 1;
+        }
+      }
 
       // If user changed product or bedSize, auto-fill unitCost with previous purchase price if unitCost is 0
       if ((field === 'productId' || field === 'bedSize') && updated.productId) {
@@ -143,13 +164,33 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       minStockBySize: { '90': 2, '105': 2, '135': 3, '150': 4, '160': 2, '180': 2, '200': 1 },
     });
 
-    // Automatically set into the first empty row
+    const isFabricCat = created.category === 'piezas_tela';
     setItems(prev => {
       const idx = prev.findIndex(i => !i.productId);
       if (idx !== -1) {
-        return prev.map((item, i) => i === idx ? { ...item, productId: created.id } : item);
+        return prev.map((item, i) =>
+          i === idx
+            ? {
+                ...item,
+                productId: created.id,
+                isFabricPiece: isFabricCat,
+                bedSize: isFabricCat ? 'Especial' : item.bedSize,
+                quantity: isFabricCat ? 0 : item.quantity,
+              }
+            : item
+        );
       }
-      return [...prev, { id: `draft-${Date.now()}`, productId: created.id, bedSize: '150', quantity: 6, unitCost: 0 }];
+      return [
+        ...prev,
+        {
+          id: `draft-${Date.now()}`,
+          productId: created.id,
+          bedSize: isFabricCat ? 'Especial' : '150',
+          quantity: isFabricCat ? 0 : 6,
+          unitCost: 0,
+          isFabricPiece: isFabricCat,
+        },
+      ];
     });
 
     setIsCreatingProduct(false);
@@ -157,7 +198,8 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
   };
 
   // Calculations - Comunidad de Bienes (Recargo de Equivalencia 26.2%)
-  const totalUnits = items.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
+  const totalUnits = items.reduce((acc, curr) => acc + (curr.isFabricPiece && !curr.quantity ? 0 : (Number(curr.quantity) || 0)), 0);
+  const fabricPieceCount = items.filter(i => i.isFabricPiece).length;
   const rawSubtotal = items.reduce((acc, curr) => acc + ((Number(curr.quantity) || 0) * (Number(curr.unitCost) || 0)), 0);
   const discountAmount = rawSubtotal * (discountPercent / 100);
   const subtotal = Math.max(0, rawSubtotal - discountAmount);
@@ -175,9 +217,11 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       return;
     }
 
-    const validLines = items.filter(i => i.productId && i.quantity > 0 && i.unitCost > 0);
+    const validLines = items.filter(
+      i => i.productId && (i.isFabricPiece || i.quantity > 0) && i.unitCost > 0
+    );
     if (validLines.length === 0) {
-      setErrorMsg('Debes añadir al menos una línea con producto, cantidad y precio de coste válido.');
+      setErrorMsg('Debes añadir al menos una línea con artículo, precio de coste válido y cantidad (o marcarla como Pieza de tela).');
       return;
     }
 
@@ -186,6 +230,7 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
       const prevPriceRecord = getLatestPriceByMfg(selectedMfgId, line.productId, line.bedSize);
 
       const isDelivered = status === 'recibido';
+      const qty = Math.max(0, Math.round(Number(line.quantity) || 0));
 
       return {
         id: `item-${Date.now()}-${Math.random()}`,
@@ -194,9 +239,10 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
         ref: prod.ref,
         category: prod.category,
         bedSize: line.bedSize,
-        quantity: Number(line.quantity),
-        receivedQuantity: isDelivered ? Number(line.quantity) : 0,
+        quantity: qty,
+        receivedQuantity: isDelivered ? qty : 0,
         isReceived: isDelivered,
+        isFabricPiece: Boolean(line.isFabricPiece),
         unitCost: Number(line.unitCost),
         previousUnitCost: prevPriceRecord?.unitCost,
         recommendedPvp: Number((line.unitCost * 1.262 * 1.7).toFixed(2)),
@@ -454,11 +500,12 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                   <thead className="bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 uppercase tracking-wider text-[11px]">
                     <tr>
                       <th className="py-2.5 px-3 font-semibold">Artículo ({selectedMfg?.name || 'Fabricante'})</th>
+                      <th className="py-2.5 px-2 font-semibold w-24 text-center">¿Pieza tela?</th>
                       <th className="py-2.5 px-3 font-semibold w-28 text-center">Medida</th>
-                      <th className="py-2.5 px-3 font-semibold w-24 text-right">Uds. Compradas</th>
+                      <th className="py-2.5 px-3 font-semibold w-28 text-right">Uds. / Metros</th>
                       <th className="py-2.5 px-3 font-semibold w-28 text-right">Precio Coste (€)</th>
                       <th className="py-2.5 px-3 font-semibold w-28 text-right">Total (€)</th>
-                      <th className="py-2.5 px-3 font-semibold w-48 text-center">Última Compra</th>
+                      <th className="py-2.5 px-3 font-semibold w-44 text-center">Última Compra</th>
                       <th className="py-2.5 px-2 w-10 text-center"></th>
                     </tr>
                   </thead>
@@ -505,6 +552,24 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                             </select>
                           </td>
 
+                          {/* Pieza de tela toggle */}
+                          <td className="py-2 px-2 text-center">
+                            <label
+                              className="inline-flex flex-col items-center gap-0.5 cursor-pointer select-none"
+                              title="Marcar si es una pieza de tela (metros variables, cantidad no obligatoria)"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={line.isFabricPiece}
+                                onChange={e => handleItemChange(line.id, 'isFabricPiece', e.target.checked)}
+                                className="rounded text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                                {line.isFabricPiece ? 'Pieza' : 'Prenda'}
+                              </span>
+                            </label>
+                          </td>
+
                           {/* Bed Size */}
                           <td className="py-2 px-3">
                             <select
@@ -523,16 +588,29 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
                             </select>
                           </td>
 
-                          {/* Quantity */}
+                          {/* Quantity (optional for Piezas de tela) */}
                           <td className="py-2 px-3 text-right">
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={line.quantity}
-                              onChange={e => handleItemChange(line.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                              className="w-full text-right px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white tabular-nums font-semibold"
-                            />
+                            {line.isFabricPiece ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={line.quantity > 0 ? line.quantity : ''}
+                                onChange={e => handleItemChange(line.id, 'quantity', Math.max(0, parseInt(e.target.value) || 0))}
+                                placeholder="Var. (opc.)"
+                                title="Cantidad opcional para piezas de tela (los metros pueden variar)"
+                                className="w-full text-right px-2 py-1.5 text-xs bg-amber-50/50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-800 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white tabular-nums font-medium"
+                              />
+                            ) : (
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={line.quantity}
+                                onChange={e => handleItemChange(line.id, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                                className="w-full text-right px-2 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none dark:text-white tabular-nums font-semibold"
+                              />
+                            )}
                           </td>
 
                           {/* Unit Cost */}
@@ -553,7 +631,13 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
 
                           {/* Total line (Quantity * Unit Cost) */}
                           <td className="py-2 px-3 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums text-sm">
-                            {lineTotal.toFixed(2)} €
+                            {line.isFabricPiece && line.quantity === 0 ? (
+                              <span className="text-xs font-sans font-semibold text-amber-700 dark:text-amber-400">
+                                Variable
+                              </span>
+                            ) : (
+                              `${lineTotal.toFixed(2)} €`
+                            )}
                           </td>
 
                           {/* Cuándo fue la última compra & variación */}
@@ -638,9 +722,9 @@ export const NewOrderModal: React.FC<NewOrderModalProps> = ({
             {/* Calculations block */}
             <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-lg border border-slate-200 dark:border-slate-800 space-y-2 text-xs">
               <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                <span>Total Prendas Textil:</span>
+                <span>Total Prendas / Piezas:</span>
                 <span className="font-semibold text-slate-900 dark:text-white tabular-nums">
-                  {totalUnits} unidades
+                  {totalUnits} uds{fabricPieceCount > 0 ? ` + ${fabricPieceCount} pieza(s) tela` : ''}
                 </span>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-400">

@@ -54,6 +54,7 @@ export interface PurchaseOrderItem {
   notes?: string;
   isReceived?: boolean; // Ha venido / Entregado
   receivedQuantity?: number; // Cantidad recibida (si es parcial, p.ej. 6 de 10)
+  isFabricPiece?: boolean; // Pieza de tela con metraje variable (cantidad no obligatoria)
 }
 
 export interface PurchaseOrder {

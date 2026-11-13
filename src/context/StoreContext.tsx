@@ -13,6 +13,7 @@ import {
   INITIAL_MANUFACTURERS, 
   INITIAL_PRODUCTS, 
   INITIAL_ORDERS,
+  INITIAL_BED_SIZES,
   TEXTILE_CATEGORIES 
 } from '../data/seedData';
 import { 
@@ -20,6 +21,14 @@ import {
   getSavedDirectoryHandle, 
   clearSavedDirectoryHandle 
 } from '../services/fileSystemService';
+import {
+  inferCategoryFromName,
+  normalizeText,
+  parseBedSize,
+  parseCsvAlbaran,
+  parseCsvDate,
+  resolveManufacturerFromFilename,
+} from '../utils/csvOrderImport';
 
 export interface LocalFolderState {
   isSupported: boolean;
@@ -57,7 +66,13 @@ interface StoreContextType {
   deleteOrder: (id: string) => void;
   updateOrderItemDelivery: (orderId: string, itemId: string, isReceived: boolean, receivedQuantity?: number) => void;
   markAllOrderItemsReceived: (orderId: string, received: boolean) => void;
-  importSingleOrderJson: (jsonOrText: string) => { success: boolean; message: string; order?: PurchaseOrder };
+  importSingleOrderJson: (jsonOrText: string, fileName?: string) => { success: boolean; message: string; order?: PurchaseOrder };
+  importParsedOrder: (data: {
+    orderDate: string;
+    manufacturerId?: string | null;
+    newManufacturerName?: string;
+    items: Array<{ productName: string; bedSize: BedSize; quantity: number; unitCost: number; isFabricPiece?: boolean }>;
+  }) => { success: boolean; message: string; order?: PurchaseOrder };
   addProduct: (productData: Omit<Product, 'id'>) => Product;
   updateProduct: (id: string, updated: Partial<Product>) => void;
   addManufacturer: (mfgData: Omit<Manufacturer, 'id'>) => Manufacturer;
@@ -156,7 +171,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [categories, setCategories] = useState<CategoryInfo[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
-      return saved ? JSON.parse(saved) : TEXTILE_CATEGORIES;
+      if (saved) {
+        const parsed: CategoryInfo[] = JSON.parse(saved);
+        if (Array.isArray(parsed) && !parsed.some(c => c.id === 'piezas_tela')) {
+          const fabricCat = TEXTILE_CATEGORIES.find(c => c.id === 'piezas_tela');
+          return fabricCat ? [...parsed, fabricCat] : parsed;
+        }
+        return parsed;
+      }
+      return TEXTILE_CATEGORIES;
     } catch {
       return TEXTILE_CATEGORIES;
     }
@@ -180,47 +203,89 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     errorMessage: null,
   });
 
-  // Helper to build CSV content
+  // Helper to build CSV content with ALL introduced data
   const buildCsvContent = () => {
     const headers = [
       'Nº Albarán/Pedido',
       'Fecha',
       'Semana',
       'Fabricante',
+      'Estado Entrega',
       'Referencia',
       'Artículo',
       'Categoría',
       'Medida Cama',
-      'Cantidad',
+      'Cantidad Pedida',
+      'Uds. Recibidas',
+      'Uds. Faltan',
       'Coste Unitario Neto (€)',
       'Coste Real c/ R.E. 26,2% (€)',
+      'Descuento (%)',
       'Subtotal Neto (€)',
       'Total con R.E. 26,2% (€)',
+      'Notas / Observaciones',
     ];
 
     const rows: string[][] = [];
 
+    const statusLabels: Record<PurchaseOrder['status'], string> = {
+      recibido: 'Recibido Completo',
+      parcial: 'Entrega Parcial',
+      en_transito: 'En tránsito',
+      pendiente_albaran: 'Pendiente de albarán',
+    };
+
     orders.forEach(order => {
       const mfg = manufacturers.find(m => m.id === order.manufacturerId)?.name || 'Desconocido';
+      const discount = order.discountPercentage || 0;
+      const discountMultiplier = 1 - discount / 100;
+      const orderStatusLabel = statusLabels[order.status] || order.status;
+      const safeNotes = (order.notes || '').replace(/"/g, '""');
+
       order.items.forEach(item => {
-        const lineNet = item.quantity * item.unitCost;
+        const isVariablePiece = Boolean(item.isFabricPiece && item.quantity === 0);
+        const receivedQty = item.receivedQuantity !== undefined
+          ? item.receivedQuantity
+          : (item.isReceived ? item.quantity : 0);
+        const missingQty = isVariablePiece
+          ? (item.isReceived ? 0 : 1)
+          : Math.max(0, item.quantity - receivedQty);
+        const catLabel = categories.find(c => c.id === item.category)?.label || item.category;
+
+        const lineNet = item.quantity * item.unitCost * discountMultiplier;
         const lineWithRE = lineNet * 1.262;
         const unitWithRE = item.unitCost * 1.262;
+        const qtyLabel = isVariablePiece
+          ? 'Pieza (m. variables)'
+          : item.isFabricPiece
+            ? `${item.quantity} (Pieza)`
+            : `${item.quantity}`;
+        const recLabel = isVariablePiece
+          ? (item.isReceived ? 'Recibida' : 'Pendiente')
+          : `${receivedQty}`;
+        const missLabel = isVariablePiece
+          ? (item.isReceived ? '0' : '1 pieza')
+          : `${missingQty}`;
 
         rows.push([
           `"${order.orderNumber}"`,
           `"${order.orderDate}"`,
           `"Semana ${order.weekNumber}"`,
-          `"${mfg}"`,
+          `"${mfg.replace(/"/g, '""')}"`,
+          `"${orderStatusLabel}"`,
           `"${item.ref}"`,
           `"${item.productName.replace(/"/g, '""')}"`,
-          `"${item.category}"`,
-          `"Cama ${item.bedSize}"`,
-          `"${item.quantity}"`,
+          `"${catLabel.replace(/"/g, '""')}"`,
+          `"${item.bedSize === 'Especial' ? 'Especial' : `Cama ${item.bedSize}`}"`,
+          `"${qtyLabel}"`,
+          `"${recLabel}"`,
+          `"${missLabel}"`,
           `"${item.unitCost.toFixed(2).replace('.', ',')}"`,
           `"${unitWithRE.toFixed(2).replace('.', ',')}"`,
+          `"${discount.toString().replace('.', ',')}"`,
           `"${lineNet.toFixed(2).replace('.', ',')}"`,
           `"${lineWithRE.toFixed(2).replace('.', ',')}"`,
+          `"${safeNotes}"`,
         ]);
       });
     });
@@ -504,7 +569,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const addOrder = (orderData: Omit<PurchaseOrder, 'id' | 'createdAt'>): PurchaseOrder => {
-    const newId = `ord-${Date.now()}`;
+    const newId = `ord-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newOrder: PurchaseOrder = {
       ...orderData,
       id: newId,
@@ -554,6 +619,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       const updatedItems = order.items.map(item => {
         if (item.id !== itemId) return item;
+        if (item.isFabricPiece && item.quantity === 0) {
+          return {
+            ...item,
+            isReceived,
+            receivedQuantity: 0,
+          };
+        }
         const finalReceivedQty = receivedQuantity !== undefined
           ? Math.max(0, Math.min(item.quantity, receivedQuantity))
           : (isReceived ? item.quantity : 0);
@@ -567,9 +639,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
       });
 
-      // Compute total ordered vs total received
-      const totalOrdered = updatedItems.reduce((sum, i) => sum + i.quantity, 0);
-      const totalReceived = updatedItems.reduce((sum, i) => sum + (i.receivedQuantity ?? (i.isReceived ? i.quantity : 0)), 0);
+      // Compute total ordered vs total received (counting variable fabric pieces as 1 unit)
+      const totalOrdered = updatedItems.reduce(
+        (sum, i) => sum + (i.isFabricPiece && i.quantity === 0 ? 1 : i.quantity),
+        0
+      );
+      const totalReceived = updatedItems.reduce((sum, i) => {
+        if (i.isFabricPiece && i.quantity === 0) {
+          return sum + (i.isReceived ? 1 : 0);
+        }
+        return sum + (i.receivedQuantity ?? (i.isReceived ? i.quantity : 0));
+      }, 0);
 
       let newStatus: PurchaseOrder['status'] = order.status;
       if (totalReceived >= totalOrdered) {
@@ -609,7 +689,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addProduct = (productData: Omit<Product, 'id'>): Product => {
     const newProduct: Product = {
       ...productData,
-      id: `prod-${Date.now()}`,
+      id: `prod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     };
     setProducts(prev => [...prev, newProduct]);
     return newProduct;
@@ -622,7 +702,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addManufacturer = (mfgData: Omit<Manufacturer, 'id'>): Manufacturer => {
     const newMfg: Manufacturer = {
       ...mfgData,
-      id: `mfg-${Date.now()}`,
+      id: `mfg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     };
     setManufacturers(prev => [...prev, newMfg]);
     return newMfg;
@@ -741,47 +821,339 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const importSingleOrderJson = (jsonOrText: string): { success: boolean; message: string; order?: PurchaseOrder } => {
-    try {
-      const parsed = JSON.parse(jsonOrText);
-      // Check if it's a full backup
-      if (parsed.manufacturers && parsed.products && parsed.orders) {
-        const ok = importBackupJson(jsonOrText);
-        return ok 
-          ? { success: true, message: `Copia de seguridad cargada: ${parsed.orders.length} pedidos y ${parsed.products.length} prendas.` }
-          : { success: false, message: 'El archivo no tiene una estructura válida.' };
-      }
+  const getIsoWeekNumber = (d: Date): number => {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  };
 
-      // Check if it's a single order object
-      if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-        const mfgId = parsed.manufacturerId || manufacturers[0]?.id;
-        const today = new Date();
-        const weekNum = parsed.weekNumber || Math.ceil((((today.getTime() - new Date(today.getFullYear(), 0, 1).getTime()) / 86400000) + 1) / 7);
-        const newOrder = addOrder({
-          orderNumber: parsed.orderNumber || `PED-${today.getFullYear()}-S${weekNum}-${Math.floor(100 + Math.random() * 900)}`,
-          orderDate: parsed.orderDate || today.toISOString().split('T')[0],
-          weekNumber: weekNum,
-          year: parsed.year || today.getFullYear(),
-          manufacturerId: mfgId,
-          status: parsed.status || 'recibido',
-          items: parsed.items,
-          discountPercentage: parsed.discountPercentage || 0,
-          vatRate: 26.2,
-          subtotal: parsed.subtotal || parsed.items.reduce((s: number, i: any) => s + (i.unitCost * i.quantity), 0),
-          total: parsed.total || Number(((parsed.subtotal || 0) * 1.262).toFixed(2)),
-          notes: parsed.notes || 'Pedido importado desde archivo.',
-        });
-        return { 
-          success: true, 
-          message: `Pedido ${newOrder.orderNumber} importado correctamente con ${newOrder.items.length} artículos.`,
-          order: newOrder 
-        };
-      }
+  const importSingleOrderJson = (
+    jsonOrText: string,
+    fileName?: string
+  ): { success: boolean; message: string; order?: PurchaseOrder } => {
+    const trimmed = jsonOrText.replace(/^\uFEFF/, '').trim();
+    const isLikelyJson =
+      (fileName && fileName.toLowerCase().endsWith('.json')) ||
+      trimmed.startsWith('{') ||
+      trimmed.startsWith('[');
 
-      return { success: false, message: 'El archivo no contiene un pedido con formato reconocido.' };
-    } catch (e: any) {
-      return { success: false, message: `Error al procesar el archivo: ${e.message}` };
+    if (isLikelyJson) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        // Check if it's a full backup
+        if (parsed.manufacturers && parsed.products && parsed.orders) {
+          const ok = importBackupJson(trimmed);
+          return ok
+            ? { success: true, message: `Copia de seguridad cargada: ${parsed.orders.length} pedidos y ${parsed.products.length} prendas.` }
+            : { success: false, message: 'El archivo no tiene una estructura válida.' };
+        }
+
+        // Single order JSON: extract ONLY fecha, fabricante (from filename if available or id), artículo, medida, cantidad, coste
+        if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+          let mfgId = parsed.manufacturerId || manufacturers[0]?.id;
+          let mfgName = manufacturers.find(m => m.id === mfgId)?.name || 'Fabricante';
+
+          if (fileName) {
+            const resolved = resolveManufacturerFromFilename(fileName, manufacturers);
+            if (resolved.matched) {
+              mfgId = resolved.matched.id;
+              mfgName = resolved.matched.name;
+            }
+          }
+
+          const rawDate = parsed.orderDate ? (parseCsvDate(String(parsed.orderDate)) || String(parsed.orderDate)) : new Date().toISOString().split('T')[0];
+          const parsedDateObj = new Date(rawDate);
+          const safeDate = isNaN(parsedDateObj.getTime()) ? new Date() : parsedDateObj;
+          const weekNum = getIsoWeekNumber(safeDate);
+
+          const localProdCache = new Map<string, Product>();
+          const cleanItems: PurchaseOrderItem[] = [];
+
+          parsed.items.forEach((rawItem: any) => {
+            const pName = String(rawItem.productName || rawItem.articulo || rawItem.name || '').trim();
+            const isFabricPiece = Boolean(rawItem.isFabricPiece);
+            const qty = Math.max(0, Math.round(Number(rawItem.quantity || rawItem.cantidad || 0)));
+            const cost = Number(rawItem.unitCost ?? rawItem.coste ?? 0);
+            if (!pName || (!isFabricPiece && qty <= 0) || isNaN(cost)) return;
+
+            const size = parseBedSize(String(rawItem.bedSize || rawItem.medida || 'Especial'));
+            const normKey = normalizeText(pName);
+
+            let prod =
+              localProdCache.get(normKey) ||
+              products.find(p => p.manufacturerId === mfgId && normalizeText(p.name) === normKey);
+
+            if (!prod) {
+              const autoRef = `ART-${Math.floor(100 + Math.random() * 900)}`;
+              prod = addProduct({
+                ref: autoRef,
+                name: pName,
+                category: isFabricPiece && categories.some(c => c.id === 'piezas_tela') ? 'piezas_tela' : inferCategoryFromName(pName, categories),
+                manufacturerId: mfgId,
+                composition: '100% Algodón',
+                availableSizes: INITIAL_BED_SIZES,
+                stockBySize: { '90': 0, '105': 0, '135': 0, '150': 0, '160': 0, '180': 0, '200': 0 },
+                minStockBySize: { '90': 2, '105': 2, '135': 3, '150': 4, '160': 2, '180': 2, '200': 1 },
+              });
+              localProdCache.set(normKey, prod);
+            }
+
+            const prevPrice = getLatestPriceByMfg(mfgId, prod.id, size);
+
+            cleanItems.push({
+              id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              productId: prod.id,
+              productName: prod.name,
+              ref: prod.ref,
+              category: prod.category,
+              bedSize: size,
+              quantity: qty,
+              receivedQuantity: qty,
+              isReceived: true,
+              isFabricPiece,
+              unitCost: cost,
+              previousUnitCost: prevPrice?.unitCost,
+              recommendedPvp: Number((cost * 1.262 * 1.7).toFixed(2)),
+            });
+          });
+
+          if (cleanItems.length === 0) {
+            return { success: false, message: 'No se encontraron artículos válidos en el archivo.' };
+          }
+
+          const subtotal = Number(cleanItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+          const total = Number((subtotal * 1.262).toFixed(2));
+
+          const newOrder = addOrder({
+            orderNumber: `PED-${safeDate.getFullYear()}-S${weekNum}-${Math.floor(100 + Math.random() * 900)}`,
+            orderDate: rawDate,
+            weekNumber: weekNum,
+            year: safeDate.getFullYear(),
+            manufacturerId: mfgId,
+            status: 'recibido',
+            items: cleanItems,
+            discountPercentage: 0,
+            vatRate: 26.2,
+            subtotal,
+            total,
+          });
+
+          return {
+            success: true,
+            message: `Albarán de ${mfgName} (${rawDate}) importado con ${cleanItems.length} artículos.`,
+            order: newOrder,
+          };
+        }
+
+        return { success: false, message: 'El archivo JSON no contiene un pedido con formato reconocido.' };
+      } catch (e: any) {
+        return { success: false, message: `Error al procesar el archivo JSON: ${e.message}` };
+      }
     }
+
+    // CSV Albarán Import: ONLY Fecha, Fabricante (from filename), Artículo, Medida, Cantidad, Coste
+    const csvResult = parseCsvAlbaran(trimmed);
+    if (!csvResult.success) {
+      return { success: false, message: csvResult.error || 'No se pudo leer el archivo CSV.' };
+    }
+
+    // 1. Resolve manufacturer from filename
+    const resolvedMfg = resolveManufacturerFromFilename(fileName || '', manufacturers);
+    let targetMfg = resolvedMfg.matched;
+    if (!targetMfg) {
+      targetMfg = addManufacturer({
+        name: resolvedMfg.suggestedName,
+        notes: 'Creado automáticamente al importar albarán CSV',
+      });
+    }
+
+    // 2. Group rows by date (one order per distinct date in the CSV)
+    const rowsByDate = new Map<string, typeof csvResult.rows>();
+    csvResult.rows.forEach(row => {
+      const existing = rowsByDate.get(row.orderDate) || [];
+      existing.push(row);
+      rowsByDate.set(row.orderDate, existing);
+    });
+
+    const localProdCache = new Map<string, Product>();
+    const createdOrders: PurchaseOrder[] = [];
+
+    rowsByDate.forEach((dateRows, orderDate) => {
+      const parsedDateObj = new Date(orderDate);
+      const safeDate = isNaN(parsedDateObj.getTime()) ? new Date() : parsedDateObj;
+      const weekNum = getIsoWeekNumber(safeDate);
+
+      const orderItems: PurchaseOrderItem[] = dateRows.map(row => {
+        const normKey = normalizeText(row.productName);
+        let prod =
+          localProdCache.get(normKey) ||
+          products.find(p => p.manufacturerId === targetMfg!.id && normalizeText(p.name) === normKey);
+
+        if (!prod) {
+          const codePrefix = (targetMfg!.code || targetMfg!.name.slice(0, 3)).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ART';
+          const autoRef = `${codePrefix}-${Math.floor(100 + Math.random() * 900)}`;
+          prod = addProduct({
+            ref: autoRef,
+            name: row.productName,
+            category: row.isFabricPiece && categories.some(c => c.id === 'piezas_tela') ? 'piezas_tela' : inferCategoryFromName(row.productName, categories),
+            manufacturerId: targetMfg!.id,
+            composition: '100% Algodón',
+            availableSizes: INITIAL_BED_SIZES,
+            stockBySize: { '90': 0, '105': 0, '135': 0, '150': 0, '160': 0, '180': 0, '200': 0 },
+            minStockBySize: { '90': 2, '105': 2, '135': 3, '150': 4, '160': 2, '180': 2, '200': 1 },
+          });
+          localProdCache.set(normKey, prod);
+        }
+
+        const prevPrice = getLatestPriceByMfg(targetMfg!.id, prod.id, row.bedSize);
+
+        return {
+          id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          productId: prod.id,
+          productName: prod.name,
+          ref: prod.ref,
+          category: prod.category,
+          bedSize: row.bedSize,
+          quantity: row.quantity,
+          receivedQuantity: row.quantity,
+          isReceived: true,
+          isFabricPiece: Boolean(row.isFabricPiece),
+          unitCost: row.unitCost,
+          previousUnitCost: prevPrice?.unitCost,
+          recommendedPvp: Number((row.unitCost * 1.262 * 1.7).toFixed(2)),
+        };
+      });
+
+      const subtotal = Number(orderItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+      const total = Number((subtotal * 1.262).toFixed(2));
+
+      const created = addOrder({
+        orderNumber: `PED-${safeDate.getFullYear()}-S${weekNum}-${Math.floor(100 + Math.random() * 900)}`,
+        orderDate,
+        weekNumber: weekNum,
+        year: safeDate.getFullYear(),
+        manufacturerId: targetMfg!.id,
+        status: 'recibido',
+        items: orderItems,
+        discountPercentage: 0,
+        vatRate: 26.2,
+        subtotal,
+        total,
+      });
+
+      createdOrders.push(created);
+    });
+
+    const totalLines = csvResult.rows.length;
+    const orderLabel = createdOrders.length === 1
+      ? `albarán del ${createdOrders[0].orderDate}`
+      : `${createdOrders.length} albaranes`;
+
+    return {
+      success: true,
+      message: `Importado ${orderLabel} de "${targetMfg.name}" con ${totalLines} artículo(s) (fecha, artículo, medida, cantidad y coste).`,
+      order: createdOrders[0],
+    };
+  };
+
+  const importParsedOrder = (data: {
+    orderDate: string;
+    manufacturerId?: string | null;
+    newManufacturerName?: string;
+    items: Array<{ productName: string; bedSize: BedSize; quantity: number; unitCost: number; isFabricPiece?: boolean }>;
+  }): { success: boolean; message: string; order?: PurchaseOrder } => {
+    const validItems = data.items.filter(
+      i => i.productName.trim() && (i.isFabricPiece || i.quantity > 0) && i.unitCost >= 0
+    );
+    if (validItems.length === 0) {
+      return { success: false, message: 'Debes incluir al menos un artículo válido con coste (y cantidad si no es pieza de tela).' };
+    }
+
+    let targetMfg = data.manufacturerId ? manufacturers.find(m => m.id === data.manufacturerId) : undefined;
+    if (!targetMfg) {
+      const mfgName = (data.newManufacturerName || '').trim() || 'Fabricante Importado';
+      const existingByName = manufacturers.find(m => normalizeText(m.name) === normalizeText(mfgName));
+      targetMfg =
+        existingByName ||
+        addManufacturer({
+          name: mfgName,
+          notes: 'Creado automáticamente al importar albarán',
+        });
+    }
+
+    const parsedDateObj = new Date(data.orderDate);
+    const safeDate = isNaN(parsedDateObj.getTime()) ? new Date() : parsedDateObj;
+    const finalDate = data.orderDate || safeDate.toISOString().split('T')[0];
+    const weekNum = getIsoWeekNumber(safeDate);
+
+    const localProdCache = new Map<string, Product>();
+    const orderItems: PurchaseOrderItem[] = validItems.map(row => {
+      const cleanName = row.productName.trim();
+      const normKey = normalizeText(cleanName);
+      let prod =
+        localProdCache.get(normKey) ||
+        products.find(p => p.manufacturerId === targetMfg!.id && normalizeText(p.name) === normKey);
+
+      if (!prod) {
+        const codePrefix = (targetMfg!.code || targetMfg!.name.slice(0, 3)).toUpperCase().replace(/[^A-Z0-9]/g, '') || 'ART';
+        const autoRef = `${codePrefix}-${Math.floor(100 + Math.random() * 900)}`;
+        prod = addProduct({
+          ref: autoRef,
+          name: cleanName,
+          category: row.isFabricPiece && categories.some(c => c.id === 'piezas_tela') ? 'piezas_tela' : inferCategoryFromName(cleanName, categories),
+          manufacturerId: targetMfg!.id,
+          composition: '100% Algodón',
+          availableSizes: INITIAL_BED_SIZES,
+          stockBySize: { '90': 0, '105': 0, '135': 0, '150': 0, '160': 0, '180': 0, '200': 0 },
+          minStockBySize: { '90': 2, '105': 2, '135': 3, '150': 4, '160': 2, '180': 2, '200': 1 },
+        });
+        localProdCache.set(normKey, prod);
+      }
+
+      const prevPrice = getLatestPriceByMfg(targetMfg!.id, prod.id, row.bedSize);
+      const qty = Math.max(0, Math.round(row.quantity || 0));
+
+      return {
+        id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        productId: prod.id,
+        productName: prod.name,
+        ref: prod.ref,
+        category: prod.category,
+        bedSize: row.bedSize,
+        quantity: qty,
+        receivedQuantity: qty,
+        isReceived: true,
+        isFabricPiece: Boolean(row.isFabricPiece),
+        unitCost: Number(row.unitCost),
+        previousUnitCost: prevPrice?.unitCost,
+        recommendedPvp: Number((row.unitCost * 1.262 * 1.7).toFixed(2)),
+      };
+    });
+
+    const subtotal = Number(orderItems.reduce((s, i) => s + i.quantity * i.unitCost, 0).toFixed(2));
+    const total = Number((subtotal * 1.262).toFixed(2));
+
+    const created = addOrder({
+      orderNumber: `PED-${safeDate.getFullYear()}-S${weekNum}-${Math.floor(100 + Math.random() * 900)}`,
+      orderDate: finalDate,
+      weekNumber: weekNum,
+      year: safeDate.getFullYear(),
+      manufacturerId: targetMfg.id,
+      status: 'recibido',
+      items: orderItems,
+      discountPercentage: 0,
+      vatRate: 26.2,
+      subtotal,
+      total,
+    });
+
+    return {
+      success: true,
+      message: `Albarán de "${targetMfg.name}" (${finalDate}) importado con ${orderItems.length} artículo(s).`,
+      order: created,
+    };
   };
 
   const exportOrdersToCsv = () => {
@@ -819,6 +1191,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateOrderItemDelivery,
         markAllOrderItemsReceived,
         importSingleOrderJson,
+        importParsedOrder,
         addProduct,
         updateProduct,
         addManufacturer,

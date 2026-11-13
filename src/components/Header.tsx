@@ -44,6 +44,10 @@ export const Header: React.FC<HeaderProps> = ({
     let count = 0;
     orders.forEach(order => {
       order.items.forEach(item => {
+        if (item.isFabricPiece && item.quantity === 0) {
+          if (!item.isReceived) count += 1;
+          return;
+        }
         const rec = item.receivedQuantity !== undefined
           ? item.receivedQuantity
           : (item.isReceived ? item.quantity : 0);

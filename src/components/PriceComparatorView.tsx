@@ -46,11 +46,13 @@ export const PriceComparatorView: React.FC = () => {
       latestOrderDate: string | null;
       latestOrderNumber: string | null;
       totalUnitsPurchased: number;
+      fabricPieceCount: number;
       priceHistory: Array<{
         date: string;
         orderNumber: string;
         unitCost: number;
         quantity: number;
+        isFabricPiece?: boolean;
       }>;
     }
 
@@ -76,6 +78,7 @@ export const PriceComparatorView: React.FC = () => {
           latestOrderDate: null,
           latestOrderNumber: null,
           totalUnitsPurchased: 0,
+          fabricPieceCount: 0,
           priceHistory: [],
         });
       });
@@ -104,17 +107,23 @@ export const PriceComparatorView: React.FC = () => {
             latestOrderDate: null,
             latestOrderNumber: null,
             totalUnitsPurchased: 0,
+            fabricPieceCount: 0,
             priceHistory: [],
           };
           map.set(key, entry);
         }
 
-        entry.totalUnitsPurchased += item.quantity;
+        if (item.isFabricPiece && item.quantity === 0) {
+          entry.fabricPieceCount += 1;
+        } else {
+          entry.totalUnitsPurchased += item.quantity;
+        }
         entry.priceHistory.push({
           date: order.orderDate,
           orderNumber: order.orderNumber,
           unitCost: item.unitCost,
           quantity: item.quantity,
+          isFabricPiece: item.isFabricPiece,
         });
       });
     });
@@ -399,7 +408,11 @@ export const PriceComparatorView: React.FC = () => {
 
                         {/* Units purchased */}
                         <td className="py-3 px-3 text-right font-mono tabular-nums text-slate-700 dark:text-slate-300">
-                          {item.totalUnitsPurchased} uds
+                          {item.fabricPieceCount > 0 && item.totalUnitsPurchased === 0
+                            ? `${item.fabricPieceCount} pieza(s)`
+                            : item.fabricPieceCount > 0
+                              ? `${item.totalUnitsPurchased} uds + ${item.fabricPieceCount} pza`
+                              : `${item.totalUnitsPurchased} uds`}
                         </td>
 
                         {/* Expand indicator */}
@@ -416,7 +429,7 @@ export const PriceComparatorView: React.FC = () => {
                               <div className="flex items-center justify-between">
                                 <h4 className="font-semibold text-xs text-slate-900 dark:text-white flex items-center gap-2">
                                   <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                                  Historial de Compras en Albaranes: {item.productName} (Cama {item.bedSize})
+                                  Historial de Compras en Albaranes: {item.productName} ({item.bedSize === 'Especial' ? 'Especial' : `Cama ${item.bedSize}`})
                                 </h4>
                                 <span className="text-xs text-slate-500">
                                   Proveedor: <strong>{item.mfgName}</strong>
@@ -446,7 +459,11 @@ export const PriceComparatorView: React.FC = () => {
                                       </div>
                                       <div className="mt-1 flex justify-between items-baseline text-[11px] text-slate-500">
                                         <span>Cantidad servida:</span>
-                                        <span className="font-semibold tabular-nums">{hist.quantity} unidades</span>
+                                        <span className="font-semibold tabular-nums">
+                                          {hist.isFabricPiece && hist.quantity === 0
+                                            ? 'Pieza (m. variables)'
+                                            : `${hist.quantity} unidades`}
+                                        </span>
                                       </div>
                                     </div>
                                   ))}

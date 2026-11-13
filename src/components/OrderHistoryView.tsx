@@ -19,8 +19,11 @@ import {
   AlertCircle,
   AlertTriangle,
   Check,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
+import { parseAlbaranDocumentFile, ParsedPdfAlbaranResult } from '../utils/pdfOrderImport';
+import { PdfImportPreviewModal } from './PdfImportPreviewModal';
 
 interface OrderHistoryViewProps {
   onOpenNewOrder: () => void;
@@ -39,25 +42,66 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
     addOrder, 
     exportOrdersToCsv, 
     importSingleOrderJson,
+    importParsedOrder,
     updateOrderItemDelivery,
     markAllOrderItemsReceived
   } = useStore();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadMessage, setUploadMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [isParsingPdf, setIsParsingPdf] = useState(false);
+  const [pdfPreviewData, setPdfPreviewData] = useState<{
+    fileName: string;
+    result: ParsedPdfAlbaranResult;
+  } | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(selectedOrderId || (orders[0]?.id || null));
   const [filterMfg, setFilterMfg] = useState<string>('todos');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+
+    const isDocument =
+      file.name.toLowerCase().endsWith('.pdf') ||
+      file.type === 'application/pdf' ||
+      file.type.startsWith('image/') ||
+      /\.(jpg|jpeg|png|webp|heic|bmp)$/i.test(file.name.toLowerCase());
+
+    if (isDocument) {
+      setIsParsingPdf(true);
+      setUploadMessage(null);
+      try {
+        const res = await parseAlbaranDocumentFile(file, manufacturers);
+        if (!res.success) {
+          setUploadMessage({ text: res.error || 'No se pudo leer el documento.', isError: true });
+        } else {
+          setPdfPreviewData({ fileName: file.name, result: res });
+        }
+      } catch (err: any) {
+        setUploadMessage({
+          text: `Error al procesar el documento: ${err?.message || 'archivo no compatible'}`,
+          isError: true,
+        });
+      } finally {
+        setIsParsingPdf(false);
+      }
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const res = importSingleOrderJson(content);
+      const buffer = event.target?.result as ArrayBuffer;
+      let content = '';
+      try {
+        content = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+      } catch {
+        content = new TextDecoder('windows-1252').decode(buffer);
+      }
+
+      const res = importSingleOrderJson(content, file.name);
       if (res.success) {
         setUploadMessage({ text: res.message });
         if (res.order) {
@@ -67,8 +111,7 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
         setUploadMessage({ text: res.message, isError: true });
       }
     };
-    reader.readAsText(file);
-    e.target.value = '';
+    reader.readAsArrayBuffer(file);
   };
 
   // Filter orders
@@ -127,16 +170,26 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
             type="file"
             ref={fileInputRef}
             onChange={handleFileUpload}
-            accept=".json,.csv"
+            accept=".json,.csv,.pdf,.jpg,.jpeg,.png,.webp,.bmp"
             className="hidden"
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
-            title="Importar un archivo de pedido o albarán guardado en tu ordenador o carpeta"
+            disabled={isParsingPdf}
+            className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs disabled:opacity-60"
+            title="Importar albarán CSV, PDF, foto o hoja escrita a mano (JPG/PNG)"
           >
-            <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            Importar Albarán
+            {isParsingPdf ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 animate-spin" />
+                Leyendo documento...
+              </>
+            ) : (
+              <>
+                <Upload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                Importar Albarán
+              </>
+            )}
           </button>
           <button
             onClick={exportOrdersToCsv}
@@ -213,8 +266,18 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
           filteredOrders.map(order => {
             const mfg = getManufacturerById(order.manufacturerId);
             const isExpanded = expandedOrderId === order.id;
-            const totalUnits = order.items.reduce((s, i) => s + i.quantity, 0);
-            const receivedUnits = order.items.reduce((s, i) => s + (i.receivedQuantity ?? (i.isReceived ? i.quantity : 0)), 0);
+            const totalUnits = order.items.reduce(
+              (s, i) => s + (i.isFabricPiece && i.quantity === 0 ? 1 : i.quantity),
+              0
+            );
+            const receivedUnits = order.items.reduce((s, i) => {
+              if (i.isFabricPiece && i.quantity === 0) {
+                return s + (i.isReceived ? 1 : 0);
+              }
+              return s + (i.receivedQuantity ?? (i.isReceived ? i.quantity : 0));
+            }, 0);
+            const fabricPieceCount = order.items.filter(i => i.isFabricPiece && i.quantity === 0).length;
+            const regularUnits = order.items.reduce((s, i) => s + i.quantity, 0);
             const missingUnits = Math.max(0, totalUnits - receivedUnits);
             const isComplete = missingUnits === 0;
 
@@ -246,7 +309,11 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                       <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-2">
                         <span>Semana {order.weekNumber} · {order.orderDate}</span>
                         <span>·</span>
-                        <span>{totalUnits} prendas</span>
+                        <span>
+                          {regularUnits > 0 ? `${regularUnits} prendas` : ''}
+                          {regularUnits > 0 && fabricPieceCount > 0 ? ' + ' : ''}
+                          {fabricPieceCount > 0 ? `${fabricPieceCount} pieza(s) tela` : ''}
+                        </span>
                         <span>·</span>
                         {isComplete ? (
                           <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded text-[11px]">
@@ -358,11 +425,14 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                               delta = { diff, pct };
                             }
 
+                            const isVariablePiece = Boolean(item.isFabricPiece && item.quantity === 0);
                             const itemReceivedQty = item.receivedQuantity !== undefined
                               ? item.receivedQuantity
                               : (item.isReceived ? item.quantity : 0);
-                            const isItemComplete = itemReceivedQty >= item.quantity;
-                            const isItemPartial = itemReceivedQty > 0 && itemReceivedQty < item.quantity;
+                            const isItemComplete = isVariablePiece
+                              ? Boolean(item.isReceived)
+                              : itemReceivedQty >= item.quantity;
+                            const isItemPartial = !isVariablePiece && itemReceivedQty > 0 && itemReceivedQty < item.quantity;
 
                             return (
                               <tr 
@@ -372,7 +442,14 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                 }`}
                               >
                                 <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white">
-                                  {item.productName}
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span>{item.productName}</span>
+                                    {item.isFabricPiece && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded">
+                                        Pieza tela
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
                                   <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-semibold text-slate-700 dark:text-slate-300">
@@ -380,13 +457,25 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                   </span>
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-bold text-slate-900 dark:text-white tabular-nums">
-                                  {item.quantity} uds
+                                  {isVariablePiece ? (
+                                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                                      Variable (m.)
+                                    </span>
+                                  ) : (
+                                    `${item.quantity} ${item.isFabricPiece ? 'm/uds' : 'uds'}`
+                                  )}
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-900 dark:text-white tabular-nums">
                                   {item.unitCost.toFixed(2)} €
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white tabular-nums">
-                                  {lineTotal.toFixed(2)} €
+                                  {isVariablePiece ? (
+                                    <span className="text-xs font-sans font-semibold text-amber-700 dark:text-amber-400">
+                                      Variable
+                                    </span>
+                                  ) : (
+                                    `${lineTotal.toFixed(2)} €`
+                                  )}
                                 </td>
                                 <td className="py-2.5 px-3 text-center">
                                   {delta ? (
@@ -427,7 +516,7 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                       {isItemComplete ? (
                                         <>
                                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                                          <span>Ha venido ({item.quantity})</span>
+                                          <span>{isVariablePiece ? 'Ha venido' : `Ha venido (${item.quantity})`}</span>
                                         </>
                                       ) : isItemPartial ? (
                                         <>
@@ -442,7 +531,7 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
                                       )}
                                     </button>
 
-                                    {item.quantity > 1 && (
+                                    {!isVariablePiece && item.quantity > 1 && (
                                       <div className="flex items-center text-slate-500 text-[11px]" title="Modificar número de unidades recibidas">
                                         <input
                                           type="number"
@@ -523,6 +612,26 @@ export const OrderHistoryView: React.FC<OrderHistoryViewProps> = ({
           })
         )}
       </div>
+
+      {/* PDF Import Preview & Confirmation Modal */}
+      <PdfImportPreviewModal
+        isOpen={Boolean(pdfPreviewData)}
+        fileName={pdfPreviewData?.fileName || ''}
+        parsedData={pdfPreviewData?.result || null}
+        onClose={() => setPdfPreviewData(null)}
+        onConfirm={(data) => {
+          const res = importParsedOrder(data);
+          setPdfPreviewData(null);
+          if (res.success) {
+            setUploadMessage({ text: res.message });
+            if (res.order) {
+              setExpandedOrderId(res.order.id);
+            }
+          } else {
+            setUploadMessage({ text: res.message, isError: true });
+          }
+        }}
+      />
     </div>
   );
 };
